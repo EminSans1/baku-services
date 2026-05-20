@@ -6,11 +6,114 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
-const { sequelize, User, Ad } = require('./db');
+const { sequelize, User, Ad, syncDatabase } = require('./db');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
+const cloudinary = require('cloudinary').v2;
+const fs = require('fs');
 
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
+
+// Local Upload Directory Creation
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+// Cloudinary Configuration
+if (process.env.CLOUDINARY_URL) {
+  const match = process.env.CLOUDINARY_URL.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
+  if (match) {
+    cloudinary.config({
+      cloud_name: match[3],
+      api_key: match[1],
+      api_secret: match[2]
+    });
+  }
+}
+
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+
+const uploadFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Недопустимый тип файла. Разрешены только JPG, PNG и WEBP.'), false);
+  }
+};
+
+const uploadAdImage = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB per file
+  fileFilter: uploadFilter
+});
+
+const uploadAvatar = multer({
+  storage: storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB per file
+  fileFilter: uploadFilter
+});
+
+// Helper: Upload file to Cloudinary (fallback to local if failed or not configured)
+const uploadToCloudinaryOrLocal = async (file) => {
+  if (process.env.CLOUDINARY_URL) {
+    try {
+      const result = await cloudinary.uploader.upload(file.path, {
+        folder: 'baku_services'
+      });
+      try {
+        fs.unlinkSync(file.path);
+      } catch (err) {
+        console.error('Failed to delete temp file:', err);
+      }
+      return result.secure_url;
+    } catch (err) {
+      console.error('Cloudinary upload failed, falling back to local:', err);
+      return `/api/uploads/${file.filename}`;
+    }
+  }
+  return `/api/uploads/${file.filename}`;
+};
+
+// Helper: Delete file from local or Cloudinary
+const deleteFileOrCloudinary = async (url) => {
+  if (!url) return;
+  if (url.includes('cloudinary.com')) {
+    try {
+      const parts = url.split('/');
+      const filename = parts[parts.length - 1];
+      const publicIdWithExt = parts.slice(parts.indexOf('upload') + 2).join('/');
+      const publicId = publicIdWithExt.substring(0, publicIdWithExt.lastIndexOf('.'));
+      await cloudinary.uploader.destroy(publicId);
+      console.log('Successfully deleted from Cloudinary:', publicId);
+    } catch (err) {
+      console.error('Failed to delete from Cloudinary:', err);
+    }
+  } else if (url.includes('/api/uploads/')) {
+    try {
+      const filename = url.split('/api/uploads/')[1];
+      const filePath = path.join(UPLOAD_DIR, filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log('Successfully deleted local file:', filePath);
+      }
+    } catch (err) {
+      console.error('Failed to delete local file:', err);
+    }
+  }
+};
 
 // Security HTTP Headers
 app.use(helmet({
@@ -20,7 +123,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:"],
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
     },
   },
 }));
@@ -127,7 +230,47 @@ const adValidation = [
     .trim()
     .notEmpty().withMessage('Описание обязательно')
     .isLength({ min: 10, max: 1000 }).withMessage('Описание должно содержать от 10 до 1000 символов')
-    .escape()
+    .escape(),
+  body('type')
+    .trim()
+    .default('service')
+    .isIn(['service', 'product']).withMessage('Недопустимый тип объявления')
+    .escape(),
+  body('condition')
+    .custom((value, { req }) => {
+      if (req.body.type === 'product') {
+        if (!value || !['new', 'used'].includes(value)) {
+          throw new Error('Для товара обязательно указать состояние (новое или б/у)');
+        }
+      }
+      return true;
+    })
+    .escape(),
+  body('price_type')
+    .custom((value, { req }) => {
+      if (req.body.type === 'product') {
+        if (!value || !['fixed', 'negotiable'].includes(value)) {
+          throw new Error('Для товара обязательно указать тип цены (фиксированная или договорная)');
+        }
+      }
+      return true;
+    })
+    .escape(),
+  body('trade_possible')
+    .optional()
+    .customSanitizer(val => val === 'true' || val === true),
+  body('images')
+    .optional()
+    .custom((value) => {
+      if (value == null) return true;
+      if (!Array.isArray(value)) {
+        throw new Error('Изображения должны быть массивом URL');
+      }
+      if (value.length > 5) {
+        throw new Error('Можно прикрепить не более 5 изображений');
+      }
+      return true;
+    })
 ];
 
 // Admin and User Authentication Configurations
@@ -190,7 +333,7 @@ app.post('/api/auth/register', validate(registerValidation), async (req, res) =>
       password: hashedPassword
     });
 
-    const userPayload = { id: newUser.id, fullname, email, phone };
+    const userPayload = { id: newUser.id, fullname, email, phone, avatar_url: newUser.avatar_url || null };
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ success: true, token, user: userPayload });
@@ -215,7 +358,13 @@ app.post('/api/auth/login', validate(loginValidation), async (req, res) => {
       return res.status(400).json({ error: 'Неверный email или пароль.' });
     }
 
-    const userPayload = { id: user.id, fullname: user.fullname, email: user.email, phone: user.phone };
+    const userPayload = {
+      id: user.id,
+      fullname: user.fullname,
+      email: user.email,
+      phone: user.phone,
+      avatar_url: user.avatar_url || null
+    };
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
     res.json({ success: true, token, user: userPayload });
@@ -295,10 +444,19 @@ app.post('/api/admin/toggle-board', checkAdminAuth, (req, res) => {
   }
 });
 
-// GET all ads (Sequelize version)
+// GET all ads (Sequelize version) with type filter
 app.get('/api/ads', async (req, res) => {
+  const { type } = req.query;
+  const whereClause = {};
+  if (type && ['service', 'product'].includes(type)) {
+    whereClause.type = type;
+  }
+
   try {
-    const ads = await Ad.findAll({ order: [['created_at', 'DESC']] });
+    const ads = await Ad.findAll({
+      where: whereClause,
+      order: [['created_at', 'DESC']]
+    });
     res.json(ads);
   } catch (err) {
     console.error('Error fetching ads:', err);
@@ -312,11 +470,13 @@ app.post('/api/ads', checkUserAuth, validate(adValidation), async (req, res) => 
     return res.status(403).json({ error: 'Публикация объявлений временно отключена администратором.' });
   }
 
-  const { title, category, price, description } = req.body;
+  const { title, category, price, description, type, condition, trade_possible, price_type, images } = req.body;
   
   // Use fullname from verified token, or allow admin override, or fallback to body name
   const name = req.isAdmin ? (req.body.name || 'Admin') : (req.user?.fullname || req.body.name || 'User');
   const userId = req.isAdmin ? null : (req.user?.id || null);
+
+  const imagesStr = images && Array.isArray(images) ? JSON.stringify(images) : null;
 
   try {
     const ad = await Ad.create({
@@ -325,7 +485,12 @@ app.post('/api/ads', checkUserAuth, validate(adValidation), async (req, res) => 
       category,
       price,
       description,
-      user_id: userId
+      user_id: userId,
+      type: type || 'service',
+      condition: type === 'product' ? condition : null,
+      trade_possible: type === 'product' ? !!trade_possible : false,
+      price_type: type === 'product' ? price_type : 'fixed',
+      images: imagesStr
     });
     res.json({ id: ad.id });
   } catch (err) {
@@ -334,12 +499,18 @@ app.post('/api/ads', checkUserAuth, validate(adValidation), async (req, res) => 
   }
 });
 
-// GET listings created by the logged-in user (Sequelize version)
+// GET listings created by the logged-in user (Sequelize version) with optional type filter
 app.get('/api/listings/my', checkUserAuth, async (req, res) => {
   const userId = req.user ? req.user.id : null;
+  const { type } = req.query;
+  const whereClause = { user_id: userId };
+  if (type && ['service', 'product'].includes(type)) {
+    whereClause.type = type;
+  }
+
   try {
     const ads = await Ad.findAll({
-      where: { user_id: userId },
+      where: whereClause,
       order: [['created_at', 'DESC']]
     });
     res.json(ads);
@@ -349,7 +520,7 @@ app.get('/api/listings/my', checkUserAuth, async (req, res) => {
   }
 });
 
-// Consolidate delete checks for both api/listings/:id and api/ads/:id (Sequelize version)
+// Consolidate delete checks for both api/listings/:id and api/ads/:id (Sequelize version) with file cleanup
 const handleAdDeletion = async (req, res) => {
   const id = req.params.id;
   try {
@@ -359,6 +530,20 @@ const handleAdDeletion = async (req, res) => {
     }
 
     if (req.isAdmin || (req.user && ad.user_id === req.user.id)) {
+      // Clean up associated images
+      if (ad.images) {
+        try {
+          const images = JSON.parse(ad.images);
+          if (Array.isArray(images)) {
+            for (const img of images) {
+              await deleteFileOrCloudinary(img);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse images for deletion:', e);
+        }
+      }
+
       await ad.destroy();
       res.json({ success: true });
     } else {
@@ -381,12 +566,21 @@ app.get('/api/listings/:id', async (req, res) => {
       include: [{
         model: User,
         as: 'user',
-        attributes: ['fullname', 'email', 'phone']
+        attributes: ['fullname', 'email', 'phone', 'avatar_url']
       }]
     });
 
     if (!ad) {
       return res.status(404).json({ error: 'Объявление не найдено' });
+    }
+
+    let parsedImages = [];
+    if (ad.images) {
+      try {
+        parsedImages = JSON.parse(ad.images);
+      } catch (e) {
+        parsedImages = [];
+      }
     }
 
     res.json({
@@ -398,7 +592,13 @@ app.get('/api/listings/:id', async (req, res) => {
       description: ad.description,
       created_at: ad.created_at,
       email: ad.user?.email || '',
-      phone: ad.user?.phone || ''
+      phone: ad.user?.phone || '',
+      avatar_url: ad.user?.avatar_url || null,
+      type: ad.type,
+      condition: ad.condition,
+      trade_possible: ad.trade_possible,
+      price_type: ad.price_type,
+      images: parsedImages
     });
   } catch (err) {
     console.error('Error fetching listing detail:', err);
@@ -409,7 +609,7 @@ app.get('/api/listings/:id', async (req, res) => {
 // Securely update an ad (allows admin and the listing author only) (Sequelize version)
 app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) => {
   const id = req.params.id;
-  const { title, category, price, description } = req.body;
+  const { title, category, price, description, type, condition, trade_possible, price_type, images } = req.body;
 
   try {
     const ad = await Ad.findByPk(id);
@@ -418,12 +618,33 @@ app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) 
     if (req.isAdmin || (req.user && ad.user_id === req.user.id)) {
       const name = req.isAdmin ? (req.body.name || ad.name) : ad.name;
       
+      const imagesStr = images && Array.isArray(images) ? JSON.stringify(images) : ad.images;
+
+      // Handle old images deletion if we are updating images!
+      if (images && Array.isArray(images) && ad.images) {
+        try {
+          const oldImages = JSON.parse(ad.images);
+          for (const oldImg of oldImages) {
+            if (!images.includes(oldImg)) {
+              await deleteFileOrCloudinary(oldImg);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse old images for deletion:', e);
+        }
+      }
+
       await ad.update({
         name,
         title,
         category,
         price,
-        description
+        description,
+        type: type || ad.type,
+        condition: type === 'product' ? condition : null,
+        trade_possible: type === 'product' ? !!trade_possible : false,
+        price_type: type === 'product' ? price_type : 'fixed',
+        images: imagesStr
       });
       res.json({ success: true });
     } else {
@@ -432,6 +653,84 @@ app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) 
   } catch (err) {
     console.error('Error checking ownership for edit:', err);
     res.status(500).json({ error: 'Ошибка базы данных при обновлении объявления' });
+  }
+});
+
+// --- IMAGE UPLOAD API ENDPOINTS ---
+
+// Upload Avatar (Authorized, max 2MB)
+app.post('/api/upload/avatar', checkUserAuth, (req, res) => {
+  uploadAvatar.single('avatar')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Пожалуйста, выберите файл для загрузки' });
+    }
+
+    try {
+      const url = await uploadToCloudinaryOrLocal(req.file);
+      
+      // Update User in database
+      const user = await User.findByPk(req.user.id);
+      if (user) {
+        // Delete old avatar if present
+        if (user.avatar_url) {
+          await deleteFileOrCloudinary(user.avatar_url);
+        }
+        await user.update({ avatar_url: url });
+      }
+
+      res.json({ success: true, url });
+    } catch (dbErr) {
+      console.error('Error updating user avatar:', dbErr);
+      res.status(500).json({ error: 'Ошибка сервера при сохранении аватара' });
+    }
+  });
+});
+
+// Upload Ad Photos (Authorized, max 5 images, each max 5MB)
+app.post('/api/upload/ad-image', checkUserAuth, (req, res) => {
+  uploadAdImage.array('images', 5)(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'Пожалуйста, выберите хотя бы один файл' });
+    }
+
+    try {
+      const urls = [];
+      for (const file of req.files) {
+        const url = await uploadToCloudinaryOrLocal(file);
+        urls.push(url);
+      }
+      res.json({ success: true, urls });
+    } catch (uploadErr) {
+      console.error('Error uploading ad images:', uploadErr);
+      res.status(500).json({ error: 'Ошибка сервера при загрузке изображений' });
+    }
+  });
+});
+
+// Serve local upload files
+app.get('/api/uploads/:filename', (req, res) => {
+  res.sendFile(path.join(UPLOAD_DIR, req.params.filename));
+});
+
+// --- ADMIN STATS ENDPOINT ---
+
+app.get('/api/admin/stats', checkAdminAuth, async (req, res) => {
+  try {
+    const servicesCount = await Ad.count({ where: { type: 'service' } });
+    const productsCount = await Ad.count({ where: { type: 'product' } });
+    res.json({
+      services: servicesCount,
+      products: productsCount
+    });
+  } catch (err) {
+    console.error('Error fetching admin stats:', err);
+    res.status(500).json({ error: 'Ошибка базы данных при получении статистики' });
   }
 });
 
@@ -449,10 +748,9 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Sync Sequelize Models and Start Server
-sequelize.sync()
+// Sync Database (with safe migrations) and Start Server
+syncDatabase()
   .then(() => {
-    console.log('Database synced successfully.');
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch(err => {

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { resolveImageUrl } from '../utils/imageUrl';
 
 function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslation }) {
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showContacts, setShowContacts] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -23,6 +25,67 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
     };
     fetchListing();
   }, [id, t]);
+
+  const getL = (key, fallback) => {
+    if (t && t(key) && t(key) !== key) return t(key);
+    const localDict = {
+      az: {
+        product: 'Məhsul',
+        service: 'Xidmət',
+        condition: 'Vəziyyət',
+        conditionNew: 'Yeni',
+        conditionUsed: 'İşlənmiş',
+        priceType: 'Qiymət şərti',
+        priceFixed: 'Sabit',
+        priceNegotiable: 'Razılaşma',
+        tradePossible: 'Barter var',
+        tradeNotPossible: 'Barter yoxdur',
+        swapPreference: 'Barter',
+        itemCondition: 'Malın vəziyyəti',
+        yes: 'Bəli',
+        no: 'Xeyr',
+        descriptionProduct: 'Məhsul təsviri',
+        descriptionService: 'Xidmət təsviri'
+      },
+      en: {
+        product: 'Product',
+        service: 'Service',
+        condition: 'Condition',
+        conditionNew: 'New',
+        conditionUsed: 'Used',
+        priceType: 'Price term',
+        priceFixed: 'Fixed',
+        priceNegotiable: 'Negotiable',
+        tradePossible: 'Trade possible',
+        tradeNotPossible: 'No trade',
+        swapPreference: 'Trade',
+        itemCondition: 'Item condition',
+        yes: 'Yes',
+        no: 'No',
+        descriptionProduct: 'Product description',
+        descriptionService: 'Service description'
+      },
+      ru: {
+        product: 'Товар',
+        service: 'Услуга',
+        condition: 'Состояние',
+        conditionNew: 'Новое',
+        conditionUsed: 'Б/у',
+        priceType: 'Условие цены',
+        priceFixed: 'Фиксированная',
+        priceNegotiable: 'Договорная',
+        tradePossible: 'Возможен обмен',
+        tradeNotPossible: 'Без обмена',
+        swapPreference: 'Обмен',
+        itemCondition: 'Состояние товара',
+        yes: 'Да',
+        no: 'Нет',
+        descriptionProduct: 'Описание товара',
+        descriptionService: 'Описание услуги'
+      }
+    };
+    return localDict[lang]?.[key] || fallback;
+  };
 
   const copyToClipboard = (text, typeKey) => {
     navigator.clipboard.writeText(text);
@@ -178,11 +241,61 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
 
       {/* Main Content Card */}
       <div className="grid md:grid-cols-2 gap-8 bg-[#171817] border border-[#242624] p-6 md:p-8 rounded-3xl shadow-xl">
-        {/* Left Column: Visual Image Block */}
-        <div className="relative aspect-square md:aspect-auto md:h-[380px] rounded-2xl overflow-hidden border border-[#242624] bg-[#111211] flex items-center justify-center">
-          {getCategoryIllustration(listing.category)}
-          <span className="absolute bottom-4 left-4 bg-[#111211]/90 backdrop-blur border border-[#242624] text-[10px] uppercase font-bold tracking-wider text-slate-400 px-3 py-1.5 rounded-full">
+        
+        {/* Left Column: Visual Image Block / Slider */}
+        <div className="relative aspect-square md:aspect-auto md:h-[380px] rounded-2xl overflow-hidden border border-[#242624] bg-[#111211] flex items-center justify-center group/gallery">
+          {listing.images && listing.images.length > 0 ? (
+            <>
+              <img 
+                src={resolveImageUrl(listing.images[activeImageIndex])} 
+                alt={`${listing.title} - ${activeImageIndex + 1}`} 
+                className="w-full h-full object-cover transition-all duration-700 ease-out scale-100 hover:scale-105"
+              />
+              
+              {/* Image Navigation Arrows */}
+              {listing.images.length > 1 && (
+                <>
+                  <button 
+                    onClick={() => setActiveImageIndex((prev) => (prev === 0 ? listing.images.length - 1 : prev - 1))}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#111211]/70 backdrop-blur border border-[#242624] text-slate-300 hover:text-white hover:bg-[#111211]/90 flex items-center justify-center transition-all opacity-0 group-hover/gallery:opacity-100 cursor-pointer select-none"
+                  >
+                    ‹
+                  </button>
+                  <button 
+                    onClick={() => setActiveImageIndex((prev) => (prev === listing.images.length - 1 ? 0 : prev + 1))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-[#111211]/70 backdrop-blur border border-[#242624] text-slate-300 hover:text-white hover:bg-[#111211]/90 flex items-center justify-center transition-all opacity-0 group-hover/gallery:opacity-100 cursor-pointer select-none"
+                  >
+                    ›
+                  </button>
+                  
+                  {/* Indicators / Dots */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 px-3 py-1.5 rounded-full bg-[#111211]/60 backdrop-blur border border-[#242624]/60">
+                    {listing.images.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveImageIndex(idx)}
+                        className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${idx === activeImageIndex ? 'bg-[#c3d6cc] w-3' : 'bg-slate-600'}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            getCategoryIllustration(listing.category)
+          )}
+          
+          <span className="absolute bottom-4 left-4 bg-[#111211]/90 backdrop-blur border border-[#242624] text-[10px] uppercase font-bold tracking-wider text-slate-400 px-3 py-1.5 rounded-full z-10">
             {localizedCategory}
+          </span>
+          
+          {/* Ad Type Badge */}
+          <span className={`absolute top-4 left-4 border backdrop-blur text-[9px] uppercase font-black tracking-widest px-3 py-1 rounded-full z-10 ${
+            listing.type === 'product' 
+              ? 'bg-amber-950/60 border-amber-800/50 text-amber-200' 
+              : 'bg-[#c3d6cc]/10 border-[#c3d6cc]/30 text-[#c3d6cc]'
+          }`}>
+            {listing.type === 'product' ? getL('product', 'Product') : getL('service', 'Service')}
           </span>
         </div>
 
@@ -206,10 +319,50 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
               <span className="text-sm font-semibold tracking-wider text-slate-400">AZN</span>
             </div>
 
+            {/* Spec details block for products */}
+            {listing.type === 'product' && (
+              <div className="grid grid-cols-3 gap-2.5 bg-[#111211]/50 border border-[#242624]/60 p-3 rounded-2xl">
+                <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#171817] border border-[#242624]/30 text-center">
+                  <span className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                    {getL('condition', 'Condition')}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    listing.condition === 'new' 
+                      ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/30' 
+                      : 'bg-slate-900/60 text-slate-400 border border-slate-700/30'
+                  }`}>
+                    {listing.condition === 'new' ? getL('conditionNew', 'New') : getL('conditionUsed', 'Used')}
+                  </span>
+                </div>
+                
+                <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#171817] border border-[#242624]/30 text-center">
+                  <span className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                    {getL('priceType', 'Price term')}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-300 leading-tight">
+                    {listing.price_type === 'negotiable' ? getL('priceNegotiable', 'Negotiable') : getL('priceFixed', 'Fixed')}
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#171817] border border-[#242624]/30 text-center">
+                  <span className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                    {getL('swapPreference', 'Trade')}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    listing.trade_possible 
+                      ? 'bg-amber-950/40 text-amber-400 border border-amber-800/30' 
+                      : 'bg-slate-900/60 text-slate-400 border border-slate-700/30'
+                  }`}>
+                    {listing.trade_possible ? getL('yes', 'Yes') : getL('no', 'No')}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Description Divider */}
             <div className="border-t border-[#242624]/60 pt-4">
               <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                {lang === 'ru' ? 'Описание услуги' : lang === 'en' ? 'Description' : 'Təsvir'}
+                {listing.type === 'product' ? getL('descriptionProduct', 'Product description') : getL('descriptionService', 'Service description')}
               </h3>
               <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-line bg-[#111211]/40 p-4 rounded-xl border border-[#242624]/30">
                 {listing.description}
@@ -220,14 +373,22 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
           {/* Author and Contacts Block */}
           <div className="border-t border-[#242624] pt-5">
             <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">
-              {lang === 'ru' ? 'Исполнитель' : lang === 'en' ? 'Provider' : 'Usta'}
+              {lang === 'ru' ? 'Автор объявления' : lang === 'en' ? 'Posted by' : 'Elanı yerləşdirən'}
             </h3>
 
             {/* Author Profile card */}
             <div className="flex items-center gap-3 bg-[#111211] p-3 rounded-2xl border border-[#242624]/50 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-[#c3d6cc] text-[#111211] font-bold text-sm flex items-center justify-center font-display uppercase">
-                {listing.name.charAt(0)}
-              </div>
+              {listing.avatar_url ? (
+                <img 
+                  src={resolveImageUrl(listing.avatar_url)} 
+                  alt={listing.name} 
+                  className="w-10 h-10 rounded-xl object-cover border border-[#242624]" 
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-[#c3d6cc] text-[#111211] font-bold text-sm flex items-center justify-center font-display uppercase">
+                  {listing.name.charAt(0)}
+                </div>
+              )}
               <div>
                 <p className="text-xs font-bold text-slate-200">{listing.name}</p>
                 <p className="text-[9px] text-slate-500 uppercase tracking-wider">

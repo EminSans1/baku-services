@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from '../context/AuthContext';
+import { resolveImageUrl } from '../utils/imageUrl';
 
 function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation, getAuthHeaders, openCreateForm }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+
+  const { token, loginUser } = useContext(AuthContext);
 
   const fetchMyListings = async () => {
     try {
@@ -46,6 +51,47 @@ function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation,
     }
   };
 
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Client-side validations
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      showToast(lang === 'az' ? 'Yalnız JPG, PNG və ya WEBP şəkilləri dəstəklənir.' : lang === 'en' ? 'Only JPG, PNG, and WEBP formats are supported.' : 'Допускаются только JPG, PNG и WEBP форматы.', 'error');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast(lang === 'az' ? 'Şəkil ölçüsü 2MB-dan çox olmamalıdır.' : lang === 'en' ? 'Image size must not exceed 2MB.' : 'Размер изображения не должен превышать 2МБ.', 'error');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      setAvatarLoading(true);
+      const res = await axios.post('/api/upload/avatar', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.data && res.data.url) {
+        loginUser(token, { ...user, avatar_url: res.data.url });
+        showToast(lang === 'az' ? 'Profil şəkli yeniləndi!' : lang === 'en' ? 'Profile picture updated!' : 'Аватар успешно обновлен!', 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || (lang === 'az' ? 'Profil şəkli yüklənərkən xəta baş verdi.' : lang === 'en' ? 'Failed to upload profile picture.' : 'Не удалось загрузить аватар.');
+      showToast(errMsg, 'error');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -53,8 +99,34 @@ function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation,
       {/* Profile Info Header Card */}
       <div className="bg-[#171817] border border-[#242624] p-6 md:p-8 rounded-3xl shadow-xl mb-8 flex flex-col md:flex-row items-center gap-6 justify-between">
         <div className="flex flex-col md:flex-row items-center gap-5">
-          <div className="w-20 h-20 rounded-2xl bg-[#c3d6cc] text-[#111211] font-bold text-3xl flex items-center justify-center font-display uppercase shadow-lg shadow-black/20">
-            {user.fullname.split(' ').map(n => n[0]).join('').substring(0, 2)}
+          <div className="relative group/avatar cursor-pointer">
+            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-[#c3d6cc] text-[#111211] font-bold text-3xl flex items-center justify-center font-display uppercase shadow-lg shadow-black/20 border border-[#242624]">
+              {avatarLoading ? (
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#111211] border-t-transparent" />
+              ) : user.avatar_url ? (
+                <img 
+                  src={resolveImageUrl(user.avatar_url)} 
+                  alt={user.fullname} 
+                  className="w-full h-full object-cover" 
+                />
+              ) : (
+                user.fullname.split(' ').map(n => n[0]).join('').substring(0, 2)
+              )}
+            </div>
+            {/* Edit / Camera Overlay */}
+            <label className="absolute inset-0 bg-black/60 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center rounded-2xl transition-opacity cursor-pointer">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+              </svg>
+              <input 
+                type="file" 
+                accept="image/jpeg,image/png,image/webp" 
+                className="hidden" 
+                onChange={handleAvatarUpload} 
+                disabled={avatarLoading}
+              />
+            </label>
           </div>
           <div className="text-center md:text-left space-y-1">
             <h1 className="text-2xl font-bold font-display text-slate-100">{user.fullname}</h1>

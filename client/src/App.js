@@ -5,6 +5,8 @@ import Login from './components/Login';
 import Register from './components/Register';
 import ListingDetail from './components/ListingDetail';
 import Profile from './components/Profile';
+import ImageUploader from './components/ImageUploader';
+import { parseAdImages, resolveImageUrl } from './utils/imageUrl';
 
 const CATEGORIES = [
   'Ремонт и строительство',
@@ -13,6 +15,17 @@ const CATEGORIES = [
   'Уборка и клининг',
   'Авто и транспорт',
   'Красота и здоровье',
+  'Другое'
+];
+
+const PRODUCT_CATEGORIES = [
+  'Электроника',
+  'Одежда и аксессуары',
+  'Дом и сад',
+  'Мебель и интерьер',
+  'Авто и запчасти',
+  'Хобби и спорт',
+  'Книги и обучение',
   'Другое'
 ];
 
@@ -118,7 +131,28 @@ const TRANSLATIONS = {
     authRequiredNotice: 'Elan yerləşdirmək üçün hesabınıza daxil olmalısınız.',
     loginButtonHeader: 'Giriş',
     registerButtonHeader: 'Qeydiyyat',
-    logoutButtonHeader: 'Çıxış'
+    logoutButtonHeader: 'Çıxış',
+    servicesTab: 'Xidmətlər',
+    marketplaceTab: 'Baraxolka',
+    typeLabel: 'Elanın növü',
+    conditionLabel: 'Vəziyyəti',
+    conditionNew: 'Yeni',
+    conditionUsed: 'İşlənmiş',
+    tradePossibleLabel: 'Barter mümkündür',
+    priceTypeLabel: 'Qiymət növü',
+    priceFixed: 'Sabit qiymət',
+    priceNegotiable: 'Razılaşma yolu ilə',
+    postNewProductTitle: '🛍️ Yeni məhsul yerləşdir',
+    titlePlaceholderProduct: 'Məsələn, iPhone 14 Pro, əla vəziyyətdə',
+    descPlaceholderProduct: 'Məhsulu təsvir edin: vəziyyəti, dəsti, zəmanəti və əlaqə məlumatları...',
+    uploadAdImages: 'Şəkilləri yüklə',
+    uploadAdImagesLimit: 'Ən çoxu 5 şəkil (JPG, PNG, WEBP, hər biri < 5MB)',
+    typeService: 'Xidmət',
+    typeProduct: 'Məhsul',
+    filterAllTypes: 'Hamısı',
+    avatarUploadSuccess: 'Profil şəkli yeniləndi!',
+    avatarUploadError: 'Profil şəkli yüklənərkən xəta',
+    uploadAvatarLabel: 'Profil şəkli (istəyə görə)'
   },
   en: {
     showcase: 'Showcase',
@@ -221,7 +255,28 @@ const TRANSLATIONS = {
     authRequiredNotice: 'You must be logged in to post a listing.',
     loginButtonHeader: 'Login',
     registerButtonHeader: 'Register',
-    logoutButtonHeader: 'Logout'
+    logoutButtonHeader: 'Logout',
+    servicesTab: 'Services',
+    marketplaceTab: 'Marketplace',
+    typeLabel: 'Listing Type',
+    conditionLabel: 'Condition',
+    conditionNew: 'New',
+    conditionUsed: 'Used',
+    tradePossibleLabel: 'Swap possible',
+    priceTypeLabel: 'Price Type',
+    priceFixed: 'Fixed Price',
+    priceNegotiable: 'Negotiable',
+    postNewProductTitle: '🛍️ Post a New Product',
+    titlePlaceholderProduct: 'e.g. iPhone 14 Pro, excellent condition',
+    descPlaceholderProduct: 'Describe the product: condition, set, warranty, contact info...',
+    uploadAdImages: 'Upload images',
+    uploadAdImagesLimit: 'Up to 5 images (JPG, PNG, WEBP, each < 5MB)',
+    typeService: 'Service',
+    typeProduct: 'Product',
+    filterAllTypes: 'All types',
+    avatarUploadSuccess: 'Profile picture updated!',
+    avatarUploadError: 'Failed to upload profile picture',
+    uploadAvatarLabel: 'Profile photo (optional)'
   },
   ru: {
     showcase: 'Витрина',
@@ -324,7 +379,28 @@ const TRANSLATIONS = {
     authRequiredNotice: 'Для размещения объявления необходимо войти в аккаунт.',
     loginButtonHeader: 'Войти',
     registerButtonHeader: 'Регистрация',
-    logoutButtonHeader: 'Выйти'
+    logoutButtonHeader: 'Выйти',
+    servicesTab: 'Услуги',
+    marketplaceTab: 'Барахолка',
+    typeLabel: 'Тип объявления',
+    conditionLabel: 'Состояние',
+    conditionNew: 'Новое',
+    conditionUsed: 'Б/У',
+    tradePossibleLabel: 'Возможен обмен',
+    priceTypeLabel: 'Тип цены',
+    priceFixed: 'Фиксированная',
+    priceNegotiable: 'Договорная',
+    postNewProductTitle: '🛍️ Разместить новый товар',
+    titlePlaceholderProduct: 'Например, iPhone 14 Pro, в отличном состоянии',
+    descPlaceholderProduct: 'Опишите товар: состояние, комплект, гарантия, контакты...',
+    uploadAdImages: 'Загрузить фотографии',
+    uploadAdImagesLimit: 'До 5 изображений (JPG, PNG, WEBP, каждое < 5МБ)',
+    typeService: 'Услуга',
+    typeProduct: 'Товар',
+    filterAllTypes: 'Все типы',
+    avatarUploadSuccess: 'Аватар успешно обновлён!',
+    avatarUploadError: 'Не удалось загрузить аватар',
+    uploadAvatarLabel: 'Фото профиля (необязательно)'
   }
 };
 
@@ -337,7 +413,14 @@ const getCategoryTranslation = (categoryName, lang) => {
     'Уборка и клининг': { az: 'Təmizlik xidməti', en: 'Cleaning & Housekeeping', ru: 'Уборка и клининг' },
     'Авто и транспорт': { az: 'Avto və nəqliyyat', en: 'Auto & Transport', ru: 'Авто и транспорт' },
     'Красота и здоровье': { az: 'Gözəllik və sağlamlıq', en: 'Beauty & Health', ru: 'Красота и здоровье' },
-    'Другое': { az: 'Digər', en: 'Other', ru: 'Другое' }
+    'Другое': { az: 'Digər', en: 'Other', ru: 'Другое' },
+    'Электроника': { az: 'Elektronika', en: 'Electronics', ru: 'Электроника' },
+    'Одежда и аксессуары': { az: 'Geyim və aksesuarlar', en: 'Clothing & Accessories', ru: 'Одежда и аксессуары' },
+    'Дом и сад': { az: 'Ev və bağ', en: 'Home & Garden', ru: 'Дом и сад' },
+    'Хобби и спорт': { az: 'Hobbi və idman', en: 'Hobby & Sport', ru: 'Хобби и спорт' },
+    'Книги и обучение': { az: 'Kitab və təhsil', en: 'Books & Learning', ru: 'Книги и обучение' },
+    'Мебель и интерьер': { az: 'Mebel və interyer', en: 'Furniture & Interior', ru: 'Мебель и интерьер' },
+    'Авто и запчасти': { az: 'Avto və ehtiyat hissələri', en: 'Auto & Parts', ru: 'Авто и запчасти' }
   };
   return mapping[categoryName]?.[lang] || categoryName;
 };
@@ -350,7 +433,12 @@ const getCategoryShortName = (categoryName, lang) => {
     'Уборка и клининг': { az: 'Təmizlik', en: 'Cleaning', ru: 'Клининг' },
     'Авто и транспорт': { az: 'Avto', en: 'Auto', ru: 'Авто' },
     'Красота и здоровье': { az: 'Gözəllik', en: 'Beauty', ru: 'Красота' },
-    'Другое': { az: 'Digər', en: 'Other', ru: 'Другое' }
+    'Другое': { az: 'Digər', en: 'Other', ru: 'Другое' },
+    'Электроника': { az: 'Elektronika', en: 'Electronics', ru: 'Электроника' },
+    'Одежда и аксессуары': { az: 'Geyim', en: 'Clothing', ru: 'Одежда' },
+    'Дом и сад': { az: 'Ev', en: 'Home', ru: 'Дом' },
+    'Хобби и спорт': { az: 'Hobbi', en: 'Hobby', ru: 'Хобби' },
+    'Книги и обучение': { az: 'Kitablar', en: 'Books', ru: 'Книги' }
   };
   return mapping[categoryName]?.[lang] || categoryName;
 };
@@ -418,13 +506,90 @@ const categoryStyles = {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     )
+  },
+  'Электроника': {
+    color: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+    iconText: '⚡',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    )
+  },
+  'Одежда и аксессуары': {
+    color: 'text-teal-400 bg-teal-400/10 border-teal-400/20',
+    iconText: '👕',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 8h-4.9c-.3 0-.6-.1-.8-.3l-2.6-2.6c-.4-.4-1-.4-1.4 0L8.7 7.7c-.2.2-.5.3-.8.3H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2z" />
+      </svg>
+    )
+  },
+  'Дом и сад': {
+    color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+    iconText: '🏡',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    )
+  },
+  'Хобби и спорт': {
+    color: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+    iconText: '⚽',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  },
+  'Книги и обучение': {
+    color: 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20',
+    iconText: '📚',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    )
+  },
+  'Мебель и интерьер': {
+    color: 'text-violet-400 bg-violet-400/10 border-violet-400/20',
+    iconText: '🛋️',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 10h16v6H4z M6 10V7h12v3" />
+      </svg>
+    )
+  },
+  'Авто и запчасти': {
+    color: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
+    iconText: '🚗',
+    icon: (
+      <svg className="w-4 h-4 mr-1.5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0z M5 11h14l-1-5H6l-1 5z" />
+      </svg>
+    )
   }
 };
 
 function App() {
   const { user, logoutUser } = useContext(AuthContext);
   const [ads, setAds] = useState([]);
-  const [form, setForm] = useState({ name: '', title: '', category: 'Ремонт и строительство', price: '', description: '' });
+  const [form, setForm] = useState({
+    name: '',
+    title: '',
+    category: 'Ремонт и строительство',
+    price: '',
+    description: '',
+    type: 'service',
+    condition: 'new',
+    trade_possible: false,
+    price_type: 'fixed',
+    images: []
+  });
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [adminTypeFilter, setAdminTypeFilter] = useState('all');
+  const [adminStats, setAdminStats] = useState({ services: 0, products: 0 });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Все');
@@ -574,14 +739,30 @@ function App() {
     }
   }, []);
 
+  const fetchAdminStats = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/admin/stats', getAuthHeaders());
+      setAdminStats(res.data);
+    } catch (err) {
+      console.error('Admin stats error:', err);
+    }
+  }, [getAuthHeaders]);
+
   useEffect(() => {
     fetchAds();
     fetchBoardStatus();
     const token = localStorage.getItem('baku_admin_token');
     if (token) {
       setIsAdmin(true);
+      fetchAdminStats();
     }
-  }, [fetchAds, fetchBoardStatus]);
+  }, [fetchAds, fetchBoardStatus, fetchAdminStats]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchAdminStats();
+    }
+  }, [isAdmin, ads.length, fetchAdminStats]);
 
   // Keyboard shortcut listener to toggle admin modal
   useEffect(() => {
@@ -606,7 +787,18 @@ function App() {
         payload.name = user.fullname;
       }
       await axios.post('/api/ads', payload, getAuthHeaders());
-      setForm({ name: '', title: '', category: 'Ремонт и строительство', price: '', description: '' });
+      setForm({
+        name: '',
+        title: '',
+        category: 'Ремонт и строительство',
+        price: '',
+        description: '',
+        type: 'service',
+        condition: 'new',
+        trade_possible: false,
+        price_type: 'fixed',
+        images: []
+      });
       setIsFormOpen(false);
       fetchAds();
       showToast(t('toastAddSuccess'));
@@ -620,7 +812,19 @@ function App() {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.put(`/api/ads/${editingAd.id}`, editingAd, getAuthHeaders());
+      const payload = {
+        title: editingAd.title,
+        category: editingAd.category,
+        price: editingAd.price,
+        description: editingAd.description,
+        type: editingAd.type,
+        condition: editingAd.condition,
+        trade_possible: editingAd.trade_possible,
+        price_type: editingAd.price_type,
+        images: parseAdImages(editingAd.images),
+        name: editingAd.name
+      };
+      await axios.put(`/api/ads/${editingAd.id}`, payload, getAuthHeaders());
       setEditingAd(null);
       fetchAds();
       showToast(t('toastEditSuccess'));
@@ -662,6 +866,7 @@ function App() {
         if (res.data.success) {
           localStorage.setItem('baku_admin_token', res.data.token);
           setIsAdmin(true);
+          fetchAdminStats();
           setIsLoginModalOpen(false);
           setAdminPassword('');
           setAdmin2faCode('');
@@ -695,38 +900,49 @@ function App() {
     }
   };
 
-  // Filter & Sort logic
-  const filteredAds = ads
+  const sortAds = (list) => list.sort((a, b) => {
+    if (sortBy === 'newest') {
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    }
+    if (sortBy === 'oldest') {
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    }
+    if (sortBy === 'price-asc') {
+      return parseFloat(a.price || 0) - parseFloat(b.price || 0);
+    }
+    if (sortBy === 'price-desc') {
+      return parseFloat(b.price || 0) - parseFloat(a.price || 0);
+    }
+    return 0;
+  });
+
+  const filteredAds = sortAds(ads
     .filter(ad => {
       const matchesSearch = 
         ad.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ad.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ad.name?.toLowerCase().includes(searchQuery.toLowerCase());
-      
       const matchesCategory = selectedCategory === 'Все' || ad.category === selectedCategory;
-      
-      return matchesSearch && matchesCategory;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'newest') {
-        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-      }
-      if (sortBy === 'oldest') {
-        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-      }
-      if (sortBy === 'price-asc') {
-        return parseFloat(a.price || 0) - parseFloat(b.price || 0);
-      }
-      if (sortBy === 'price-desc') {
-        return parseFloat(b.price || 0) - parseFloat(a.price || 0);
-      }
-      return 0;
-    });
+      const matchesType = typeFilter === 'all' || ad.type === typeFilter;
+      return matchesSearch && matchesCategory && matchesType;
+    }));
+
+  const adminFilteredAds = sortAds(ads
+    .filter(ad => {
+      const matchesSearch =
+        ad.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ad.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ad.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'Все' || ad.category === selectedCategory;
+      const matchesAdminType = adminTypeFilter === 'all' || ad.type === adminTypeFilter;
+      return matchesSearch && matchesCategory && matchesAdminType;
+    }));
 
   // Calculate statistics for the admin dashboard
   const getCategoryStats = () => {
     const counts = {};
-    CATEGORIES.forEach(cat => { counts[cat] = 0; });
+    const ALL_CATS = Array.from(new Set([...CATEGORIES, ...PRODUCT_CATEGORIES]));
+    ALL_CATS.forEach(cat => { counts[cat] = 0; });
     ads.forEach(ad => {
       if (counts[ad.category] !== undefined) {
         counts[ad.category]++;
@@ -737,7 +953,7 @@ function App() {
 
     const maxCount = Math.max(...Object.values(counts), 1);
     
-    return CATEGORIES.map(cat => ({
+    return ALL_CATS.map(cat => ({
       category: cat,
       count: counts[cat],
       percentage: (counts[cat] / maxCount) * 100,
@@ -746,8 +962,17 @@ function App() {
     }));
   };
 
-  const totalAveragePrice = ads.length > 0
-    ? Math.round(ads.reduce((sum, ad) => sum + parseFloat(ad.price || 0), 0) / ads.length)
+  const servicesCount = adminStats.services ?? ads.filter(ad => ad.type === 'service' || !ad.type).length;
+  const productsCount = adminStats.products ?? ads.filter(ad => ad.type === 'product').length;
+  const servicesAds = ads.filter(ad => ad.type === 'service' || !ad.type);
+  const productsAds = ads.filter(ad => ad.type === 'product');
+
+  const servicesAveragePrice = servicesAds.filter(ad => ad.price_type !== 'negotiable').length > 0
+    ? Math.round(servicesAds.filter(ad => ad.price_type !== 'negotiable').reduce((sum, ad) => sum + parseFloat(ad.price || 0), 0) / servicesAds.filter(ad => ad.price_type !== 'negotiable').length)
+    : 0;
+
+  const productsAveragePrice = productsAds.filter(ad => ad.price_type !== 'negotiable').length > 0
+    ? Math.round(productsAds.filter(ad => ad.price_type !== 'negotiable').reduce((sum, ad) => sum + parseFloat(ad.price || 0), 0) / productsAds.filter(ad => ad.price_type !== 'negotiable').length)
     : 0;
 
   return (
@@ -1115,6 +1340,35 @@ function App() {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Type Selector */}
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('typeLabel')}</label>
+                      <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, type: 'service', category: 'Ремонт и строительство' })}
+                          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                            form.type === 'service'
+                              ? 'bg-[#d2e2db] text-[#111211]'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {t('typeService')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, type: 'product', category: 'Электроника' })}
+                          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                            form.type === 'product'
+                              ? 'bg-amber-500 text-black'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {t('typeProduct')}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('yourName')}</label>
@@ -1136,7 +1390,7 @@ function App() {
                           value={form.category}
                           onChange={e => setForm({ ...form, category: e.target.value })}
                         >
-                          {CATEGORIES.map(cat => (
+                          {(form.type === 'product' ? PRODUCT_CATEGORIES : CATEGORIES).map(cat => (
                             <option key={cat} value={cat} className="bg-[#171817] text-slate-100">
                               {getCategoryTranslation(cat, lang)}
                             </option>
@@ -1145,12 +1399,92 @@ function App() {
                       </div>
                     </div>
 
+                    {form.type === 'product' && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#111211]/30 p-4 border border-[#242624] rounded-2xl">
+                        {/* Condition Selector */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('conditionLabel')}</label>
+                          <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, condition: 'new' })}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                                form.condition === 'new'
+                                  ? 'bg-[#d2e2db] text-[#111211]'
+                                  : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {t('conditionNew')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, condition: 'used' })}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                                form.condition === 'used'
+                                  ? 'bg-amber-600/80 text-white'
+                                  : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {t('conditionUsed')}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Price Type Selector */}
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('priceTypeLabel')}</label>
+                          <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, price_type: 'fixed' })}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                                form.price_type === 'fixed'
+                                  ? 'bg-[#d2e2db] text-[#111211]'
+                                  : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {t('priceFixed')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, price_type: 'negotiable', price: '' })}
+                              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                                form.price_type === 'negotiable'
+                                  ? 'bg-slate-700 text-white'
+                                  : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {t('priceNegotiable')}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Trade Possible Switch */}
+                        <div className="flex flex-col justify-center">
+                          <span className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('tradePossibleLabel')}</span>
+                          <label className="relative inline-flex items-center cursor-pointer mt-1 select-none">
+                            <input
+                              type="checkbox"
+                              checked={form.trade_possible}
+                              onChange={e => setForm({ ...form, trade_possible: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-[#111211] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#d2e2db] after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600/30 border border-[#242624]"></div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="md:col-span-2">
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('serviceTitle')}</label>
+                        <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
+                          {form.type === 'product'
+                            ? (lang === 'az' ? 'Məhsulun adı' : lang === 'en' ? 'Product Name' : 'Название товара')
+                            : t('serviceTitle')}
+                        </label>
                         <input
                           className="w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition-all"
-                          placeholder={t('servicePlaceholder')}
+                          placeholder={form.type === 'product' ? t('titlePlaceholderProduct') : t('servicePlaceholder')}
                           value={form.title}
                           onChange={e => setForm({ ...form, title: e.target.value })}
                           required
@@ -1162,11 +1496,14 @@ function App() {
                           <input
                             type="number"
                             min="0"
-                            className="w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl pl-4 pr-12 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition-all"
+                            className={`w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl pl-4 pr-12 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition-all ${
+                              form.price_type === 'negotiable' ? 'opacity-40 cursor-not-allowed' : ''
+                            }`}
                             placeholder="30"
-                            value={form.price}
+                            value={form.price_type === 'negotiable' ? '' : form.price}
                             onChange={e => setForm({ ...form, price: e.target.value })}
-                            required
+                            disabled={form.price_type === 'negotiable'}
+                            required={form.price_type !== 'negotiable'}
                           />
                           <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
                             AZN
@@ -1179,12 +1516,21 @@ function App() {
                       <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('detailedDescription')}</label>
                       <textarea
                         className="w-full h-32 bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 outline-none transition-all resize-none"
-                        placeholder={t('descPlaceholder')}
+                        placeholder={form.type === 'product' ? t('descPlaceholderProduct') : t('descPlaceholder')}
                         value={form.description}
                         onChange={e => setForm({ ...form, description: e.target.value })}
                         required
                       />
                     </div>
+
+                    <ImageUploader
+                      images={form.images || []}
+                      onChange={(images) => setForm({ ...form, images })}
+                      t={t}
+                      getAuthHeaders={getAuthHeaders}
+                      showToast={showToast}
+                      lang={lang}
+                    />
 
                     <div className="flex justify-end gap-3 pt-2">
                       <button
@@ -1208,6 +1554,52 @@ function App() {
 
             {/* Filter and search bar in Dark/Green reference style */}
             <section className="bg-[#171817] border border-[#242624] p-5 rounded-2xl mb-8 space-y-4">
+              {/* Type Filter Toggles */}
+              <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter('all');
+                    setSelectedCategory('Все');
+                  }}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    typeFilter === 'all'
+                      ? 'bg-[#d2e2db] text-[#111211]'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lang === 'az' ? 'Hamısı' : lang === 'en' ? 'All' : 'Все'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter('service');
+                    setSelectedCategory('Все');
+                  }}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    typeFilter === 'service'
+                      ? 'bg-emerald-600/30 text-emerald-400 border border-emerald-500/20'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lang === 'az' ? 'Xidmətlər' : lang === 'en' ? 'Services' : 'Услуги'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypeFilter('product');
+                    setSelectedCategory('Все');
+                  }}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    typeFilter === 'product'
+                      ? 'bg-amber-600/30 text-amber-400 border border-amber-500/20'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {lang === 'az' ? 'Baraxolka' : lang === 'en' ? 'Marketplace' : 'Барахолка'}
+                </button>
+              </div>
+
               <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                 
                 {/* Search */}
@@ -1263,24 +1655,31 @@ function App() {
                 >
                   {getCategoryTranslation('Все', lang)}
                 </button>
-                {CATEGORIES.map(cat => {
-                  const isSelected = selectedCategory === cat;
-                  const info = categoryStyles[cat] || categoryStyles['Другое'];
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center ${
-                        isSelected
-                          ? 'bg-[#d2e2db] border-[#c3d6cc] text-[#111211]'
-                          : 'bg-[#111211] border-[#242624] text-slate-400 hover:text-white hover:border-slate-700'
-                      }`}
-                    >
-                      {!isSelected && <span className="mr-1.5">{info.iconText}</span>}
-                      <span>{getCategoryTranslation(cat, lang)}</span>
-                    </button>
-                  );
-                })}
+                {(() => {
+                  const catsToShow = typeFilter === 'service' 
+                    ? CATEGORIES 
+                    : typeFilter === 'product' 
+                      ? PRODUCT_CATEGORIES 
+                      : Array.from(new Set([...CATEGORIES, ...PRODUCT_CATEGORIES]));
+                  return catsToShow.map(cat => {
+                    const isSelected = selectedCategory === cat;
+                    const info = categoryStyles[cat] || categoryStyles['Другое'];
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center ${
+                          isSelected
+                            ? 'bg-[#d2e2db] border-[#c3d6cc] text-[#111211]'
+                            : 'bg-[#111211] border-[#242624] text-slate-400 hover:text-white hover:border-slate-700'
+                        }`}
+                      >
+                        {!isSelected && <span className="mr-1.5">{info.iconText}</span>}
+                        <span>{getCategoryTranslation(cat, lang)}</span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             </section>
 
@@ -1313,6 +1712,8 @@ function App() {
                     } catch (e) {}
                   }
 
+                  const parsedImages = parseAdImages(ad.images);
+
                   return (
                     <div 
                       key={ad.id} 
@@ -1320,12 +1721,61 @@ function App() {
                       onClick={() => navigateTo('/listing/' + ad.id)}
                     >
                       <div>
+                        {/* Listing Image Cover & Badges */}
+                        <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden border border-[#242624] bg-[#111211] mb-5 flex items-center justify-center group-hover:border-slate-700 transition-all duration-300">
+                          {parsedImages && parsedImages.length > 0 ? (
+                            <img 
+                              src={resolveImageUrl(parsedImages[0])} 
+                              alt={ad.title} 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-slate-650 opacity-40">
+                              <span className="text-3xl mb-1">{info.iconText}</span>
+                              <span className="text-[10px] uppercase tracking-wider">{getCategoryTranslation(ad.category, lang)}</span>
+                            </div>
+                          )}
+                          
+                          {/* Top-Left Category & Type Badges */}
+                          <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-wider ${info.color}`}>
+                              {getCategoryTranslation(ad.category, lang)}
+                            </span>
+                            
+                            {/* Type Badge */}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider border ${
+                              ad.type === 'product'
+                                ? 'bg-amber-600/80 text-white border-amber-500/35'
+                                : 'bg-emerald-600/30 text-emerald-400 border-emerald-500/20'
+                            }`}>
+                              {ad.type === 'product' ? t('typeProduct') : t('typeService')}
+                            </span>
+                          </div>
+                          
+                          {/* Top-Right Condition & Trade badges */}
+                          <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end z-10">
+                            {/* Condition Badge (Product only) */}
+                            {ad.type === 'product' && ad.condition && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider border ${
+                                ad.condition === 'new'
+                                  ? 'bg-emerald-650 text-white border-emerald-500/40'
+                                  : 'bg-[#242624] text-slate-300 border-[#303330]'
+                              }`}>
+                                {ad.condition === 'new' ? t('conditionNew') : t('conditionUsed')}
+                              </span>
+                            )}
+                            
+                            {/* Swap / Barter Badge */}
+                            {ad.type === 'product' && ad.trade_possible && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-indigo-650 text-white border border-indigo-500/40" title={t('tradePossibleLabel')}>
+                                🔁 {lang === 'az' ? 'Barter' : lang === 'en' ? 'Swap' : 'Обмен'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
                         {/* Header Details */}
-                        <div className="flex items-center justify-between mb-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold border uppercase tracking-wider ${info.color}`}>
-                            <span className="mr-1">{info.iconText}</span>
-                            {getCategoryTranslation(ad.category, lang)}
-                          </span>
+                        <div className="flex items-center justify-between mb-3">
                           <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1359,9 +1809,15 @@ function App() {
 
                         <div className="text-right">
                           <span className="text-[9px] text-slate-500 block leading-tight font-bold uppercase tracking-wider">{t('price')}</span>
-                          <span className="text-base font-extrabold text-[#c3d6cc] font-display">
-                            {ad.price} <span className="text-xs font-bold">AZN</span>
-                          </span>
+                          {ad.price_type === 'negotiable' ? (
+                            <span className="text-xs font-bold text-[#c3d6cc] uppercase tracking-wider block mt-1">
+                              {t('priceNegotiable')}
+                            </span>
+                          ) : (
+                            <span className="text-base font-extrabold text-[#c3d6cc] font-display">
+                              {ad.price} <span className="text-xs font-bold">AZN</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1400,7 +1856,7 @@ function App() {
 
         {/* REGISTER VIEW */}
         {viewMode === 'register' && (
-          <Register t={t} setViewMode={setViewMode} showToast={showToast} />
+          <Register t={t} setViewMode={setViewMode} showToast={showToast} lang={lang} />
         )}
 
         {/* ADMIN DASHBOARD VIEW */}
@@ -1509,15 +1965,21 @@ function App() {
               
               {/* Card 3: Tracking (Pale green card) */}
               <div className="bg-[#d2e2db] text-[#111211] p-6 rounded-2xl flex flex-col justify-between h-44 shadow-sm">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#111211]/80">{t('totalOffers')}</span>
-                  <span className="text-sm">•••</span>
+                  <span className="text-xs font-bold text-[#111211]/70">{ads.length}</span>
                 </div>
-                <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#111211]/50">{t('bulletinBoard')}</h4>
-                  <p className="text-5xl font-extrabold font-display my-1">{ads.length}</p>
-                  <p className="text-xs font-bold text-[#111211]/60">{t('activeListingsInDb')}</p>
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <div className="border-r border-[#111211]/15 pr-2">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-[#111211]/50">{t('typeService')}</p>
+                    <p className="text-2xl font-extrabold font-display leading-tight">{servicesCount}</p>
+                  </div>
+                  <div className="pl-1">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-[#111211]/50">{t('typeProduct')}</p>
+                    <p className="text-2xl font-extrabold font-display leading-tight">{productsCount}</p>
+                  </div>
                 </div>
+                <p className="text-[9px] font-bold text-[#111211]/50 mt-1 uppercase tracking-wider">{t('activeListingsInDb')}</p>
               </div>
 
               {/* Card 4: Detailed report (Last uploaded list) */}
@@ -1555,12 +2017,18 @@ function App() {
               <div className="bg-[#171817] border border-[#242624] p-6 rounded-2xl flex flex-col justify-between h-44">
                 <div>
                   <h3 className="text-white font-bold text-xs uppercase tracking-wider mb-0.5">{t('averagePrice')}</h3>
-                  <p className="text-[9px] text-slate-500">{t('averageCostPerService')}</p>
+                  <p className="text-[9px] text-slate-500">Split average metrics per segment</p>
                 </div>
                 
-                <div className="my-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-extrabold text-[#c3d6cc] font-display">{totalAveragePrice}</span>
-                  <span className="text-xs font-bold text-slate-500">AZN</span>
+                <div className="grid grid-cols-2 gap-4 my-2">
+                  <div className="border-r border-[#242624] pr-2">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">{t('typeService')}</p>
+                    <p className="text-lg font-extrabold text-[#c3d6cc] font-display leading-tight">{servicesAveragePrice} <span className="text-[10px] font-bold text-slate-500">AZN</span></p>
+                  </div>
+                  <div className="pl-1">
+                    <p className="text-[8px] font-bold uppercase tracking-wider text-slate-500">{t('typeProduct')}</p>
+                    <p className="text-lg font-extrabold text-amber-400 font-display leading-tight">{productsAveragePrice} <span className="text-[10px] font-bold text-slate-500">AZN</span></p>
+                  </div>
                 </div>
 
                 <div className="border-t border-[#242624]/60 pt-3 flex items-center justify-between">
@@ -1598,9 +2066,19 @@ function App() {
                   onChange={e => setSelectedCategory(e.target.value)}
                 >
                   <option value="Все">{getCategoryTranslation('Все', lang)}</option>
-                  {CATEGORIES.map(cat => (
+                  {Array.from(new Set([...CATEGORIES, ...PRODUCT_CATEGORIES])).map(cat => (
                     <option key={cat} value={cat}>{getCategoryTranslation(cat, lang)}</option>
                   ))}
+                </select>
+
+                <select
+                  className="bg-[#111211] border border-[#242624] rounded-xl px-3 py-2 text-xs text-[#c3d6cc] outline-none cursor-pointer"
+                  value={adminTypeFilter}
+                  onChange={e => setAdminTypeFilter(e.target.value)}
+                >
+                  <option value="all">{t('filterAllTypes')}</option>
+                  <option value="service">{t('typeService')}</option>
+                  <option value="product">{t('typeProduct')}</option>
                 </select>
               </div>
 
@@ -1610,6 +2088,7 @@ function App() {
                     <tr className="border-b border-[#242624] text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                       <th className="py-4 px-6">{t('id')}</th>
                       <th className="py-4 px-6">{t('titleHeader')}</th>
+                      <th className="py-4 px-6">{t('typeLabel')}</th>
                       <th className="py-4 px-6">{t('categoryHeader')}</th>
                       <th className="py-4 px-6">{t('authorHeader')}</th>
                       <th className="py-4 px-6 text-right">{t('priceHeader')}</th>
@@ -1617,11 +2096,20 @@ function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#242624]/60 text-xs">
-                    {filteredAds.map(ad => (
+                    {adminFilteredAds.map(ad => (
                       <tr key={ad.id} className="hover:bg-[#111211]/30 transition-colors">
                         <td className="py-4 px-6 font-mono text-[10px] text-slate-500">#{ad.id}</td>
                         <td className="py-4 px-6 font-bold text-white max-w-xs truncate" title={ad.title}>
                           {ad.title}
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border uppercase tracking-wider ${
+                            ad.type === 'product'
+                              ? 'bg-amber-600/30 text-amber-400 border-amber-500/20'
+                              : 'bg-emerald-600/30 text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {ad.type === 'product' ? t('typeProduct') : t('typeService')}
+                          </span>
                         </td>
                         <td className="py-4 px-6">
                           <span className="px-2 py-0.5 bg-[#242624] text-[#c3d6cc] rounded text-[10px] font-semibold border border-slate-800">
@@ -1629,11 +2117,13 @@ function App() {
                           </span>
                         </td>
                         <td className="py-4 px-6 text-slate-350">{ad.name}</td>
-                        <td className="py-4 px-6 text-right font-bold text-emerald-400 font-display">{ad.price} AZN</td>
+                        <td className="py-4 px-6 text-right font-bold text-emerald-400 font-display">
+                          {ad.price_type === 'negotiable' ? t('priceNegotiable') : `${ad.price} AZN`}
+                        </td>
                         <td className="py-4 px-6 text-center">
                           <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={() => setEditingAd(ad)}
+                              onClick={() => setEditingAd({ ...ad, images: parseAdImages(ad.images) })}
                               className="px-2.5 py-1.5 border border-[#242624] bg-[#111211] hover:bg-[#242624] text-slate-300 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
                             >
                               {t('editShort')}
@@ -1648,9 +2138,9 @@ function App() {
                         </td>
                       </tr>
                     ))}
-                    {filteredAds.length === 0 && (
+                    {adminFilteredAds.length === 0 && (
                       <tr>
-                        <td colSpan="6" className="py-8 px-6 text-center text-slate-500 font-medium">
+                        <td colSpan="7" className="py-8 px-6 text-center text-slate-500 font-medium">
                           No ads found
                         </td>
                       </tr>
@@ -1750,7 +2240,36 @@ function App() {
             <h3 className="text-base font-bold text-white mb-1 uppercase tracking-wider">{t('editListingTitle')}</h3>
             <p className="text-xs text-slate-500 mb-5">{t('editListingParams')} #{editingAd.id}</p>
 
-            <form onSubmit={handleEditSubmit} className="space-y-4">
+            <form onSubmit={handleEditSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+              {/* Type Selector */}
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('typeLabel')}</label>
+                <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setEditingAd({ ...editingAd, type: 'service', category: 'Ремонт и строительство' })}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      editingAd.type === 'service'
+                        ? 'bg-[#d2e2db] text-[#111211]'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {t('typeService')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingAd({ ...editingAd, type: 'product', category: 'Электроника' })}
+                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      editingAd.type === 'product'
+                        ? 'bg-amber-500 text-black'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {t('typeProduct')}
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('yourName')}</label>
@@ -1769,7 +2288,7 @@ function App() {
                     value={editingAd.category}
                     onChange={e => setEditingAd({ ...editingAd, category: e.target.value })}
                   >
-                    {CATEGORIES.map(cat => (
+                    {(editingAd.type === 'product' ? PRODUCT_CATEGORIES : CATEGORIES).map(cat => (
                       <option key={cat} value={cat} className="bg-[#171817] text-slate-100">
                         {getCategoryTranslation(cat, lang)}
                       </option>
@@ -1778,12 +2297,92 @@ function App() {
                 </div>
               </div>
 
+              {editingAd.type === 'product' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#111211]/30 p-4 border border-[#242624] rounded-2xl">
+                  {/* Condition Selector */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('conditionLabel')}</label>
+                    <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                      <button
+                        type="button"
+                        onClick={() => setEditingAd({ ...editingAd, condition: 'new' })}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          editingAd.condition === 'new'
+                            ? 'bg-[#d2e2db] text-[#111211]'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {t('conditionNew')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingAd({ ...editingAd, condition: 'used' })}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          editingAd.condition === 'used'
+                            ? 'bg-amber-600/80 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {t('conditionUsed')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Price Type Selector */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('priceTypeLabel')}</label>
+                    <div className="flex bg-[#111211] border border-[#242624] p-1 rounded-xl w-fit">
+                      <button
+                        type="button"
+                        onClick={() => setEditingAd({ ...editingAd, price_type: 'fixed' })}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          editingAd.price_type === 'fixed'
+                            ? 'bg-[#d2e2db] text-[#111211]'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {t('priceFixed')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingAd({ ...editingAd, price_type: 'negotiable', price: '' })}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          editingAd.price_type === 'negotiable'
+                            ? 'bg-slate-700 text-white'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {t('priceNegotiable')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Trade Possible Switch */}
+                  <div className="flex flex-col justify-center">
+                    <span className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('tradePossibleLabel')}</span>
+                    <label className="relative inline-flex items-center cursor-pointer mt-1 select-none">
+                      <input
+                        type="checkbox"
+                        checked={editingAd.trade_possible || false}
+                        onChange={e => setEditingAd({ ...editingAd, trade_possible: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-[#111211] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#d2e2db] after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600/30 border border-[#242624]"></div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('serviceTitle')}</label>
+                  <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {editingAd.type === 'product'
+                      ? (lang === 'az' ? 'Məhsulun adı' : lang === 'en' ? 'Product Name' : 'Название товара')
+                      : t('serviceTitle')}
+                  </label>
                   <input
                     className="w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-650 outline-none transition-all"
-                    placeholder={t('servicePlaceholder')}
+                    placeholder={editingAd.type === 'product' ? t('titlePlaceholderProduct') : t('servicePlaceholder')}
                     value={editingAd.title}
                     onChange={e => setEditingAd({ ...editingAd, title: e.target.value })}
                     required
@@ -1795,11 +2394,14 @@ function App() {
                     <input
                       type="number"
                       min="0"
-                      className="w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl pl-4 pr-12 py-3 text-sm text-slate-100 placeholder-slate-650 outline-none transition-all"
+                      className={`w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl pl-4 pr-12 py-3 text-sm text-slate-100 placeholder-slate-650 outline-none transition-all ${
+                        editingAd.price_type === 'negotiable' ? 'opacity-40 cursor-not-allowed' : ''
+                      }`}
                       placeholder="30"
-                      value={editingAd.price}
+                      value={editingAd.price_type === 'negotiable' ? '' : editingAd.price}
                       onChange={e => setEditingAd({ ...editingAd, price: e.target.value })}
-                      required
+                      disabled={editingAd.price_type === 'negotiable'}
+                      required={editingAd.price_type !== 'negotiable'}
                     />
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">
                       AZN
@@ -1811,13 +2413,22 @@ function App() {
               <div>
                 <label className="block text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">{t('detailedDescription')}</label>
                 <textarea
-                  className="w-full h-32 bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-650 outline-none transition-all resize-none"
-                  placeholder={t('detailedDescription')}
+                  className="w-full h-32 bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-655 outline-none transition-all resize-none"
+                  placeholder={editingAd.type === 'product' ? t('descPlaceholderProduct') : t('descPlaceholder')}
                   value={editingAd.description}
                   onChange={e => setEditingAd({ ...editingAd, description: e.target.value })}
                   required
                 />
               </div>
+
+              <ImageUploader
+                images={parseAdImages(editingAd.images)}
+                onChange={(images) => setEditingAd({ ...editingAd, images })}
+                t={t}
+                getAuthHeaders={getAuthHeaders}
+                showToast={showToast}
+                lang={lang}
+              />
 
               <div className="flex justify-end gap-3 pt-2">
                 <button

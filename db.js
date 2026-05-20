@@ -48,6 +48,10 @@ const User = sequelize.define('User', {
   password: {
     type: Sequelize.STRING,
     allowNull: false
+  },
+  avatar_url: {
+    type: Sequelize.STRING,
+    allowNull: true
   }
 }, {
   tableName: 'users',
@@ -84,6 +88,29 @@ const Ad = sequelize.define('Ad', {
       model: User,
       key: 'id'
     }
+  },
+  type: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: 'service'
+  },
+  condition: {
+    type: Sequelize.STRING,
+    allowNull: true
+  },
+  trade_possible: {
+    type: Sequelize.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  price_type: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: 'fixed'
+  },
+  images: {
+    type: Sequelize.TEXT,
+    allowNull: true
   }
 }, {
   tableName: 'ads',
@@ -96,8 +123,66 @@ const Ad = sequelize.define('Ad', {
 User.hasMany(Ad, { foreignKey: 'user_id', as: 'ads' });
 Ad.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// Safe migration function to run before sync
+async function syncDatabase() {
+  const queryInterface = sequelize.getQueryInterface();
+
+  const safeAddColumn = async (tableName, columnName, definition) => {
+    try {
+      await queryInterface.addColumn(tableName, columnName, definition);
+      console.log(`[Migration] Column '${columnName}' successfully added to table '${tableName}'.`);
+    } catch (err) {
+      console.log(`[Migration] Column '${columnName}' in table '${tableName}' already exists or skipped: ${err.message}`);
+    }
+  };
+
+  // Add avatar_url to users
+  await safeAddColumn('users', 'avatar_url', {
+    type: Sequelize.STRING,
+    allowNull: true
+  });
+
+  // Add type to ads
+  await safeAddColumn('ads', 'type', {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: 'service'
+  });
+
+  // Add condition to ads
+  await safeAddColumn('ads', 'condition', {
+    type: Sequelize.STRING,
+    allowNull: true
+  });
+
+  // Add trade_possible to ads
+  await safeAddColumn('ads', 'trade_possible', {
+    type: Sequelize.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  });
+
+  // Add price_type to ads
+  await safeAddColumn('ads', 'price_type', {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: 'fixed'
+  });
+
+  // Add images to ads
+  await safeAddColumn('ads', 'images', {
+    type: Sequelize.TEXT,
+    allowNull: true
+  });
+
+  // Run native sync
+  await sequelize.sync();
+  console.log('[Database] Sync completed successfully.');
+}
+
 module.exports = {
   sequelize,
   User,
-  Ad
+  Ad,
+  syncDatabase
 };

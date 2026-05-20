@@ -1,15 +1,54 @@
 import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-
-function Register({ t, setViewMode, showToast }) {
+function Register({ t, setViewMode, showToast, lang }) {
   const { loginUser } = useContext(AuthContext);
   const [fullname, setFullname] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const handleAvatarSelect = (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      showToast(
+        lang === 'az' ? 'Yalnız JPG, PNG və WEBP' : lang === 'en' ? 'Only JPG, PNG, WEBP' : 'Только JPG, PNG, WEBP',
+        'error'
+      );
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast(
+        lang === 'az' ? 'Şəkil 2MB-dan kiçik olmalıdır' : lang === 'en' ? 'Image must be under 2MB' : 'Изображение до 2МБ',
+        'error'
+      );
+      return;
+    }
+
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const uploadAvatar = async (token) => {
+    if (!avatarFile) return null;
+    const formData = new FormData();
+    formData.append('avatar', avatarFile);
+    const res = await axios.post('/api/upload/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return res.data?.url || null;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,7 +68,23 @@ function Register({ t, setViewMode, showToast }) {
         phone,
         password
       });
-      loginUser(res.data.token, res.data.user);
+
+      let user = res.data.user;
+      const token = res.data.token;
+
+      if (avatarFile) {
+        try {
+          const avatarUrl = await uploadAvatar(token);
+          if (avatarUrl) {
+            user = { ...user, avatar_url: avatarUrl };
+          }
+        } catch (uploadErr) {
+          console.error(uploadErr);
+          showToast(t('avatarUploadError') || 'Avatar upload failed', 'error');
+        }
+      }
+
+      loginUser(token, user);
       showToast(t('registerSuccessToast') || 'Success');
       setViewMode('showcase');
     } catch (err) {
@@ -41,6 +96,8 @@ function Register({ t, setViewMode, showToast }) {
     }
   };
 
+  const initials = (fullname || 'U').split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase();
+
   return (
     <div className="max-w-md mx-auto my-12 bg-[#171817] border border-[#242624] p-8 rounded-2xl shadow-xl">
       <div className="text-center mb-6">
@@ -50,6 +107,28 @@ function Register({ t, setViewMode, showToast }) {
         <p className="text-xs text-slate-500">
           {t('postNewServiceTitle') ? t('postNewServiceTitle').replace('✨ ', '') : 'Create your provider account'}
         </p>
+      </div>
+
+      <div className="flex flex-col items-center mb-6">
+        <label className="relative group/avatar cursor-pointer">
+          <div className="w-20 h-20 rounded-2xl overflow-hidden bg-[#c3d6cc] text-[#111211] font-bold text-2xl flex items-center justify-center font-display uppercase border border-[#242624]">
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
+            ) : (
+              initials
+            )}
+          </div>
+          <span className="absolute inset-0 bg-black/60 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center rounded-2xl transition-opacity text-white text-[9px] uppercase tracking-wider font-bold">
+            {t('uploadAvatarLabel') || 'Photo'}
+          </span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleAvatarSelect}
+          />
+        </label>
+        <p className="text-[10px] text-slate-500 mt-2 text-center">{t('uploadAvatarLabel')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -63,7 +142,6 @@ function Register({ t, setViewMode, showToast }) {
             value={fullname}
             onChange={(e) => setFullname(e.target.value)}
             required
-            autoFocus
           />
         </div>
 
