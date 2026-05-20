@@ -434,6 +434,39 @@ function App() {
   // Translation state (defaulting to 'az' - Azerbaijani)
   const [lang, setLang] = useState(() => localStorage.getItem('baku_lang') || 'az');
 
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('baku_theme');
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  // Sync theme with system changes if the user hasn't set an explicit preference
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e) => {
+      if (!localStorage.getItem('baku_theme')) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else {
+      mediaQuery.addListener(handleChange);
+      return () => mediaQuery.removeListener(handleChange);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('baku_theme', nextTheme);
+  };
+
   const t = useCallback((key) => {
     return TRANSLATIONS[lang]?.[key] || TRANSLATIONS['ru']?.[key] || key;
   }, [lang]);
@@ -761,6 +794,14 @@ function App() {
                 ))}
               </div>
               
+              <button
+                onClick={toggleTheme}
+                className="w-8 h-8 rounded-lg bg-[#171817] border border-[#242624] flex items-center justify-center text-xs hover:bg-[#242624] transition-all"
+                title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+              >
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
+              
               {/* User Icon/Login button */}
               {user ? (
                 <button
@@ -829,6 +870,14 @@ function App() {
                   </button>
                 ))}
               </div>
+
+              <button
+                onClick={toggleTheme}
+                className="w-8 h-8 rounded-xl bg-[#171817] border border-[#242624] flex items-center justify-center text-xs hover:bg-[#242624] transition-all cursor-pointer"
+                title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+              >
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
 
               {/* Indicator Badge */}
               <div className="flex items-center gap-2 px-3 py-1.5 bg-[#171817] border border-[#242624] rounded-xl text-[10px] font-bold uppercase tracking-wider text-[#c3d6cc]">
