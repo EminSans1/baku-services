@@ -722,16 +722,16 @@ function App() {
       
       {/* Top Navigation Bar matching reference */}
       <header className="border-b border-[#242624] bg-[#111211]/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
           
-          {/* Logo & Navigation */}
-          <div className="flex flex-col sm:flex-row items-center gap-6 w-full md:w-auto">
+          {/* Top Line: Logo/Title & Mobile Controls */}
+          <div className="flex items-center justify-between w-full md:w-auto">
             {/* Logo Image & Name with secret Double Click */}
             <div className="flex items-center gap-3 select-none">
               <img 
                 src="/logo.png" 
                 alt="Baku Services" 
-                className="h-12 w-auto object-contain rounded-lg border border-[#242624] hover:opacity-80 transition-opacity cursor-pointer" 
+                className="h-10 md:h-12 w-auto object-contain rounded-lg border border-[#242624] hover:opacity-80 transition-opacity cursor-pointer" 
                 onDoubleClick={() => {
                   navigateTo('/idare-paneli');
                 }}
@@ -745,8 +745,51 @@ function App() {
               </div>
             </div>
 
+            {/* Mobile-only Top Right controls: Language & Profile */}
+            <div className="flex items-center gap-2 md:hidden">
+              {/* Language Selector */}
+              <div className="flex items-center bg-[#171817] border border-[#242624] p-0.5 rounded-lg text-[9px] font-bold uppercase">
+                {['az', 'en', 'ru'].map(l => (
+                  <button
+                    key={l}
+                    onClick={() => {
+                      setLang(l);
+                      localStorage.setItem('baku_lang', l);
+                    }}
+                    className={`px-2 py-0.5 rounded-md transition-all ${
+                      lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-500 hover:text-slate-350'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+              
+              {/* User Icon/Login button */}
+              {user ? (
+                <button
+                  onClick={() => setViewMode('profile')}
+                  className="w-8 h-8 rounded-lg bg-[#242624] border border-[#c3d6cc]/40 flex items-center justify-center text-xs text-white"
+                >
+                  👤
+                </button>
+              ) : (
+                !isAdmin && (
+                  <button
+                    onClick={() => setViewMode('login')}
+                    className="px-3 py-1.5 bg-[#d2e2db] text-[#111211] text-[10px] font-bold rounded-lg transition-all"
+                  >
+                    {t('loginButtonHeader')}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Desktop-only Navigation & Header Controls */}
+          <div className="hidden md:flex items-center gap-6">
             {/* Menu Items */}
-            <nav className="flex items-center gap-1 bg-[#171817] border border-[#242624] p-1 rounded-xl w-full sm:w-auto justify-center sm:justify-start">
+            <nav className="flex items-center gap-1 bg-[#171817] border border-[#242624] p-1 rounded-xl">
               <button
                 onClick={() => setViewMode('showcase')}
                 className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
@@ -771,99 +814,179 @@ function App() {
                 </button>
               )}
             </nav>
+
+            {/* Language Switcher & Controls */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center bg-[#171817] border border-[#242624] p-1 rounded-xl">
+                {['az', 'en', 'ru'].map(l => (
+                  <button
+                    key={l}
+                    onClick={() => {
+                      setLang(l);
+                      localStorage.setItem('baku_lang', l);
+                    }}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg transition-all ${
+                      lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* Indicator Badge */}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-[#171817] border border-[#242624] rounded-xl text-[10px] font-bold uppercase tracking-wider text-[#c3d6cc]">
+                <span className={`w-1.5 h-1.5 rounded-full ${boardActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                <span>{boardActive ? t('boardOpenBadge') : t('postingDisabledBadge')}</span>
+              </div>
+
+              {/* Post Service button */}
+              {viewMode === 'showcase' && (
+                <button
+                  onClick={() => setIsFormOpen(!isFormOpen)}
+                  className={`flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 border border-[#242624] ${
+                    isFormOpen
+                      ? 'bg-[#242624] text-[#e2e8f0]'
+                      : 'bg-[#d2e2db] text-[#111211] hover:bg-[#c3d6cc]'
+                  }`}
+                >
+                  {isFormOpen ? t('hideFormBtn') : t('postServiceBtn')}
+                </button>
+              )}
+
+              {/* Session Buttons */}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setViewMode('profile')}
+                    className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 border rounded-xl transition-all cursor-pointer ${
+                      viewMode === 'profile'
+                        ? 'bg-[#242624] border-[#c3d6cc] text-white'
+                        : 'bg-[#171817] border-[#242624] hover:bg-[#242624] text-[#c3d6cc] hover:text-white'
+                    }`}
+                  >
+                    👤 {user.fullname.split(' ')[0]}
+                  </button>
+                  <button
+                    onClick={logoutUser}
+                    className="px-4 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    {t('logoutButtonHeader')}
+                  </button>
+                </div>
+              ) : (
+                !isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setViewMode('login')}
+                      className="px-4 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-[#c3d6cc] text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      {t('loginButtonHeader')}
+                    </button>
+                    <button
+                      onClick={() => setViewMode('register')}
+                      className="px-4 py-2 bg-[#d2e2db] hover:bg-[#c3d6cc] text-[#111211] text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    >
+                      {t('registerButtonHeader')}
+                    </button>
+                  </div>
+                )
+              )}
+
+              {isAdmin && (
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 border border-rose-950/40 bg-rose-950/10 hover:bg-rose-950/30 text-rose-450 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  {t('logoutBtn')}
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Right Header Controls */}
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-center md:justify-end">
-            
-            {/* Language Switcher */}
-            <div className="flex items-center bg-[#171817] border border-[#242624] p-1 rounded-xl">
-              {['az', 'en', 'ru'].map(l => (
-                <button
-                  key={l}
-                  onClick={() => {
-                    setLang(l);
-                    localStorage.setItem('baku_lang', l);
-                  }}
-                  className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg transition-all ${
-                    lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
-            </div>
-
-            {/* Indicator Badge */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#171817] border border-[#242624] rounded-xl text-[10px] font-bold uppercase tracking-wider text-[#c3d6cc]">
-              <span className={`w-1.5 h-1.5 rounded-full ${boardActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span>{boardActive ? t('boardOpenBadge') : t('postingDisabledBadge')}</span>
-            </div>
-
-            {/* Main Action Button */}
-            {viewMode === 'showcase' && (
+          {/* Mobile-only Navigation Tabs Row */}
+          <div className="flex md:hidden items-center justify-between w-full pt-1 border-t border-[#242624]/40 mt-1">
+            <nav className="flex items-center gap-1 bg-[#171817] border border-[#242624] p-0.5 rounded-lg w-full">
               <button
-                onClick={() => setIsFormOpen(!isFormOpen)}
-                className={`flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 border border-[#242624] ${
-                  isFormOpen
-                    ? 'bg-[#242624] text-[#e2e8f0]'
-                    : 'bg-[#d2e2db] text-[#111211] hover:bg-[#c3d6cc]'
+                onClick={() => setViewMode('showcase')}
+                className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
+                  viewMode === 'showcase'
+                    ? 'bg-[#d2e2db] text-[#111211]'
+                    : 'text-[#c3d6cc]'
                 }`}
               >
-                {isFormOpen ? t('hideFormBtn') : t('postServiceBtn')}
+                {t('showcase')}
               </button>
-            )}
-
-            {/* User Session Control */}
-            {user ? (
-              <div className="flex items-center gap-3">
+              {user && (
                 <button
                   onClick={() => setViewMode('profile')}
-                  className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 border rounded-xl transition-all cursor-pointer ${
+                  className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
                     viewMode === 'profile'
-                      ? 'bg-[#242624] border-[#c3d6cc] text-white'
-                      : 'bg-[#171817] border-[#242624] hover:bg-[#242624] text-[#c3d6cc] hover:text-white'
+                      ? 'bg-[#d2e2db] text-[#111211]'
+                      : 'text-[#c3d6cc]'
                   }`}
                 >
-                  👤 {user.fullname.split(' ')[0]}
+                  {lang === 'ru' ? 'Кабинет' : lang === 'en' ? 'Profile' : 'Kabinet'}
                 </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={() => setViewMode('admin')}
+                  className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
+                    viewMode === 'admin'
+                      ? 'bg-[#d2e2db] text-[#111211]'
+                      : 'text-[#c3d6cc]'
+                  }`}
+                >
+                  <span>{t('adminPanel')}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                </button>
+              )}
+              {user && (
                 <button
                   onClick={logoutUser}
-                  className="px-4 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  className="px-3 py-2 text-[11px] font-bold text-slate-500 rounded-md"
                 >
-                  {t('logoutButtonHeader')}
+                  {lang === 'ru' ? 'Выйти' : lang === 'en' ? 'Logout' : 'Çıxış'}
                 </button>
-              </div>
-            ) : (
-              !isAdmin && (
-                <div className="flex items-center gap-2">
+              )}
+              {!user && !isAdmin && (
+                <>
                   <button
                     onClick={() => setViewMode('login')}
-                    className="px-4 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-[#c3d6cc] text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
+                      viewMode === 'login'
+                        ? 'bg-[#d2e2db] text-[#111211]'
+                        : 'text-[#c3d6cc]'
+                    }`}
                   >
                     {t('loginButtonHeader')}
                   </button>
                   <button
                     onClick={() => setViewMode('register')}
-                    className="px-4 py-2 bg-[#d2e2db] hover:bg-[#c3d6cc] text-[#111211] text-xs font-bold rounded-xl transition-all cursor-pointer"
+                    className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
+                      viewMode === 'register'
+                        ? 'bg-[#d2e2db] text-[#111211]'
+                        : 'text-[#c3d6cc]'
+                    }`}
                   >
                     {t('registerButtonHeader')}
                   </button>
-                </div>
-              )
-            )}
-
-            {/* Admin Authentication */}
-            {isAdmin && (
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 border border-rose-950/40 bg-rose-950/10 hover:bg-rose-950/30 text-rose-400 text-xs font-bold rounded-xl transition-all cursor-pointer"
-              >
-                {t('logoutBtn')}
-              </button>
-            )}
+                </>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-2 text-[11px] font-bold text-rose-400 rounded-md"
+                >
+                  {t('logoutBtn')}
+                </button>
+              )}
+            </nav>
           </div>
+
         </div>
+
       </header>
 
       {/* Toast Notification */}
