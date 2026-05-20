@@ -26,7 +26,13 @@ app.use(helmet({
 }));
 
 // CORS Configuration - Restrict origins to frontend dev & prod & custom CLIENT_ORIGIN env
-const allowedOrigins = ['http://localhost:3000', 'http://localhost:5000', process.env.CLIENT_ORIGIN].filter(Boolean);
+const allowedOrigins = [
+  'http://localhost:3000', 
+  'http://localhost:5000', 
+  'https://baku-services.onrender.com',
+  process.env.CLIENT_ORIGIN
+].filter(Boolean);
+
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
@@ -252,19 +258,19 @@ const sendFailedAdminResponse = (req, res) => {
 // Admin Login Step 1: Verify Password
 app.post('/api/admin/verify-password', adminVerifyLimiter, (req, res) => {
   const { password } = req.body;
-  if (password === ADMIN_PASSWORD) {
-    res.json({ success: true });
+  if (password && password.trim() === ADMIN_PASSWORD.trim()) {
+    res.json({ success: true, message: 'Password verified. Proceed to 2FA.' });
   } else {
     sendFailedAdminResponse(req, res);
   }
 });
 
-// Admin Login Step 2: Verify Password + 2FA Code
+// Admin Login Step 2: Verify Password again + 2FA Code
 app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
   const { password, code } = req.body;
   const ADMIN_2FA_CODE = process.env.ADMIN_2FA_CODE || '8844';
 
-  if (password === ADMIN_PASSWORD && code === ADMIN_2FA_CODE) {
+  if (password && code && password.trim() === ADMIN_PASSWORD.trim() && code.trim() === ADMIN_2FA_CODE.trim()) {
     const ip = req.ip || req.connection.remoteAddress;
     console.log(`[INFO] Successful admin login from IP ${ip} at ${new Date().toISOString()}`);
     res.json({ success: true, token: ADMIN_TOKEN });
