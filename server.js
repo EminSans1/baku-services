@@ -9,8 +9,37 @@ const { body, validationResult } = require('express-validator');
 const { sequelize, User, Ad, syncDatabase } = require('./db');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
-const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
+
+// Cloudinary SDK reads CLOUDINARY_URL on require — validate format first
+function parseCloudinaryEnv() {
+  const raw = process.env.CLOUDINARY_URL;
+  if (!raw) return null;
+  const trimmed = String(raw).trim().replace(/^["']|["']$/g, '');
+  const match = trimmed.match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
+  if (!match) {
+    console.warn(
+      '[WARN] CLOUDINARY_URL invalid. Use: cloudinary://API_KEY:API_SECRET@CLOUD_NAME (from Cloudinary Dashboard)'
+    );
+    return null;
+  }
+  return {
+    api_key: match[1],
+    api_secret: match[2],
+    cloud_name: match[3]
+  };
+}
+
+const cloudinaryCredentials = parseCloudinaryEnv();
+if (!cloudinaryCredentials) {
+  delete process.env.CLOUDINARY_URL;
+}
+
+const cloudinary = require('cloudinary').v2;
+if (cloudinaryCredentials) {
+  cloudinary.config(cloudinaryCredentials);
+  console.log(`[INFO] Cloudinary enabled (cloud: ${cloudinaryCredentials.cloud_name})`);
+}
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
@@ -46,18 +75,6 @@ const PORT = process.env.PORT || 5000;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-// Cloudinary Configuration
-if (process.env.CLOUDINARY_URL) {
-  const match = process.env.CLOUDINARY_URL.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
-  if (match) {
-    cloudinary.config({
-      cloud_name: match[3],
-      api_key: match[1],
-      api_secret: match[2]
-    });
-  }
 }
 
 // Multer Storage Configuration
@@ -142,7 +159,7 @@ const uploadAvatar = multer({
 
 // Helper: Upload file to Cloudinary (fallback to local if failed or not configured)
 const uploadToCloudinaryOrLocal = async (file) => {
-  if (process.env.CLOUDINARY_URL) {
+  if (cloudinaryCredentials) {
     try {
       const result = await cloudinary.uploader.upload(file.path, {
         folder: 'baku_services'
