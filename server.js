@@ -12,6 +12,32 @@ const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
+/** Require env in production; allow dev fallbacks only for local SQLite. */
+function requireEnv(name, devFallback) {
+  const value = process.env[name];
+  if (value && String(value).trim()) {
+    return String(value).trim();
+  }
+  if (IS_PRODUCTION) {
+    console.error(`[FATAL] Missing required environment variable: ${name}`);
+    process.exit(1);
+  }
+  if (devFallback !== undefined) {
+    console.warn(`[WARN] ${name} not set — using development fallback.`);
+    return devFallback;
+  }
+  console.error(`[FATAL] Missing environment variable: ${name}`);
+  process.exit(1);
+}
+
+const JWT_SECRET = requireEnv('JWT_SECRET', 'dev-only-jwt-secret');
+const ADMIN_PASSWORD = requireEnv('ADMIN_PASSWORD', 'dev-only-admin-password');
+const ADMIN_TOKEN = requireEnv('ADMIN_TOKEN', 'dev-only-admin-token');
+const ADMIN_2FA_CODE = requireEnv('ADMIN_2FA_CODE', '000000');
+
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
@@ -41,18 +67,66 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${uuidv4()}${ext}`);
+    const safeExt = ALLOWED_IMAGE_EXTENSIONS.has(ext) ? ext : '.jpg';
+    cb(null, `${uuidv4()}${safeExt}`);
   }
 });
 
 const uploadFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Недопустимый тип файла. Разрешены только JPG, PNG и WEBP.'), false);
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!allowedTypes.includes(file.mimetype) || !ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
+    return cb(new Error('Недопустимый тип файла. Разрешены только JPG, PNG и WEBP.'), false);
   }
+  cb(null, true);
 };
+
+/** Prevent path traversal when serving or deleting local uploads. */
+function safeLocalFilename(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const base = path.basename(raw);
+  if (!base || base !== raw || base.includes('..')) return null;
+  const ext = path.extname(base).toLowerCase();
+  if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) return null;
+  if (!/^[a-zA-Z0-9._-]+$/.test(base)) return null;
+  return base;
+}
+
+function resolveUploadFilePath(filename) {
+  const safe = safeLocalFilename(filename);
+  if (!safe) return null;
+  const uploadRoot = path.resolve(UPLOAD_DIR);
+  const resolved = path.resolve(uploadRoot, safe);
+  if (!resolved.startsWith(uploadRoot + path.sep)) return null;
+  return resolved;
+}
+
+function isAllowedImageUrl(url) {
+  if (typeof url !== 'string' || url.length > 512) return false;
+  if (url.startsWith('https://res.cloudinary.com/')) {
+    return /^https:\/\/res\.cloudinary\.com\/[a-zA-Z0-9_-]+\//.test(url);
+  }
+  if (url.startsWith('/api/uploads/')) {
+    return safeLocalFilename(url.slice('/api/uploads/'.length)) !== null;
+  }
+  return false;
+}
+
+function sanitizeImageUrls(images) {
+  if (images == null) return null;
+  if (!Array.isArray(images)) {
+    throw new Error('Изображения должны быть массивом URL');
+  }
+  if (images.length > 5) {
+    throw new Error('Можно прикрепить не более 5 изображений');
+  }
+  for (const url of images) {
+    if (!isAllowedImageUrl(url)) {
+      throw new Error('Недопустимый URL изображения');
+    }
+  }
+  return images;
+}
 
 const uploadAdImage = multer({
   storage: storage,
@@ -104,8 +178,8 @@ const deleteFileOrCloudinary = async (url) => {
   } else if (url.includes('/api/uploads/')) {
     try {
       const filename = url.split('/api/uploads/')[1];
-      const filePath = path.join(UPLOAD_DIR, filename);
-      if (fs.existsSync(filePath)) {
+      const filePath = resolveUploadFilePath(filename);
+      if (filePath && fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
         console.log('Successfully deleted local file:', filePath);
       }
@@ -164,7 +238,14 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/', authLimiter);
 
-app.use(express.json());
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  message: { error: 'Слишком много загрузок. Попробуйте позже.' }
+});
+app.use('/api/upload/', uploadLimiter);
+
+app.use(express.json({ limit: '200kb' }));
 
 // Validation wrapper middleware
 const validate = (validations) => {
@@ -197,7 +278,11 @@ const registerValidation = [
     .escape(),
   body('password')
     .notEmpty().withMessage('Пароль обязателен')
-    .isLength({ min: 6 }).withMessage('Пароль должен содержать не менее 6 символов')
+    .isLength({ min: IS_PRODUCTION ? 8 : 6 }).withMessage(
+      IS_PRODUCTION
+        ? 'Пароль должен содержать не менее 8 символов'
+        : 'Пароль должен содержать не менее 6 символов'
+    )
 ];
 
 const loginValidation = [
@@ -262,21 +347,11 @@ const adValidation = [
   body('images')
     .optional()
     .custom((value) => {
-      if (value == null) return true;
-      if (!Array.isArray(value)) {
-        throw new Error('Изображения должны быть массивом URL');
-      }
-      if (value.length > 5) {
-        throw new Error('Можно прикрепить не более 5 изображений');
-      }
+      sanitizeImageUrls(value);
       return true;
     })
 ];
 
-// Admin and User Authentication Configurations
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Sansfrisk2008';
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'baku-admin-token-2026-Sansfrisk2008';
-const JWT_SECRET = process.env.JWT_SECRET || 'baku_services_jwt_secret_key_2026_special';
 let boardActive = true;
 
 // Middleware for Admin validation
@@ -417,7 +492,6 @@ app.post('/api/admin/verify-password', adminVerifyLimiter, (req, res) => {
 // Admin Login Step 2: Verify Password again + 2FA Code
 app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
   const { password, code } = req.body;
-  const ADMIN_2FA_CODE = process.env.ADMIN_2FA_CODE || '8844';
 
   if (password && code && password.trim() === ADMIN_PASSWORD.trim() && code.trim() === ADMIN_2FA_CODE.trim()) {
     const ip = req.ip || req.connection.remoteAddress;
@@ -476,7 +550,13 @@ app.post('/api/ads', checkUserAuth, validate(adValidation), async (req, res) => 
   const name = req.isAdmin ? (req.body.name || 'Admin') : (req.user?.fullname || req.body.name || 'User');
   const userId = req.isAdmin ? null : (req.user?.id || null);
 
-  const imagesStr = images && Array.isArray(images) ? JSON.stringify(images) : null;
+  let imagesStr = null;
+  try {
+    const safeImages = sanitizeImageUrls(images);
+    imagesStr = safeImages ? JSON.stringify(safeImages) : null;
+  } catch (imgErr) {
+    return res.status(400).json({ error: imgErr.message });
+  }
 
   try {
     const ad = await Ad.create({
@@ -618,14 +698,20 @@ app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) 
     if (req.isAdmin || (req.user && ad.user_id === req.user.id)) {
       const name = req.isAdmin ? (req.body.name || ad.name) : ad.name;
       
-      const imagesStr = images && Array.isArray(images) ? JSON.stringify(images) : ad.images;
+      let safeImages = null;
+      try {
+        safeImages = images != null ? sanitizeImageUrls(images) : null;
+      } catch (imgErr) {
+        return res.status(400).json({ error: imgErr.message });
+      }
+      const imagesStr = safeImages ? JSON.stringify(safeImages) : ad.images;
 
       // Handle old images deletion if we are updating images!
-      if (images && Array.isArray(images) && ad.images) {
+      if (safeImages && ad.images) {
         try {
           const oldImages = JSON.parse(ad.images);
           for (const oldImg of oldImages) {
-            if (!images.includes(oldImg)) {
+            if (!safeImages.includes(oldImg)) {
               await deleteFileOrCloudinary(oldImg);
             }
           }
@@ -666,6 +752,9 @@ app.post('/api/upload/avatar', checkUserAuth, (req, res) => {
     }
     if (!req.file) {
       return res.status(400).json({ error: 'Пожалуйста, выберите файл для загрузки' });
+    }
+    if (!req.user?.id || req.isAdmin) {
+      return res.status(403).json({ error: 'Загрузка аватара доступна только авторизованным пользователям.' });
     }
 
     try {
@@ -713,9 +802,13 @@ app.post('/api/upload/ad-image', checkUserAuth, (req, res) => {
   });
 });
 
-// Serve local upload files
+// Serve local upload files (path traversal safe)
 app.get('/api/uploads/:filename', (req, res) => {
-  res.sendFile(path.join(UPLOAD_DIR, req.params.filename));
+  const filePath = resolveUploadFilePath(req.params.filename);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Файл не найден' });
+  }
+  res.sendFile(filePath);
 });
 
 // --- ADMIN STATS ENDPOINT ---

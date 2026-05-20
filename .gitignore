@@ -5,3 +5,5 @@ db.sqlite
 .DS_Store
 dist/
 build/
+uploads/
+scratch/
