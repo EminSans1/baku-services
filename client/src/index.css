@@ -154,3 +154,9 @@
 [data-theme='light'] .selection\:text-\[\#111211\]::selection {
   color: #ffffff !important;
 }
+
+/* Light Theme Logo blending filter */
+[data-theme='light'] img[alt="Baku Services"] {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95);
+  border-color: transparent !important;
+}
