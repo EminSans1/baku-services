@@ -774,7 +774,7 @@ function App() {
           </div>
 
           {/* Right Header Controls */}
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-center md:justify-end">
             
             {/* Language Switcher */}
             <div className="flex items-center bg-[#171817] border border-[#242624] p-1 rounded-xl">
@@ -1084,10 +1084,10 @@ function App() {
               </div>
 
               {/* Categories Navigation */}
-              <div className="flex flex-wrap gap-2 pt-3 border-t border-[#242624]/60">
+              <div className="flex overflow-x-auto gap-2 pt-3 border-t border-[#242624]/60 scrollbar-none flex-nowrap -mx-5 px-5 md:mx-0 md:px-0 md:flex-wrap">
                 <button
                   onClick={() => setSelectedCategory('Все')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     selectedCategory === 'Все'
                       ? 'bg-[#d2e2db] border-[#c3d6cc] text-[#111211]'
                       : 'bg-[#111211] border-[#242624] text-slate-400 hover:text-white hover:border-slate-700'
@@ -1102,7 +1102,7 @@ function App() {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center ${
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all flex items-center ${
                         isSelected
                           ? 'bg-[#d2e2db] border-[#c3d6cc] text-[#111211]'
                           : 'bg-[#111211] border-[#242624] text-slate-400 hover:text-white hover:border-slate-700'
