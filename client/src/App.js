@@ -553,7 +553,7 @@ function App() {
   // Keyboard shortcut listener to toggle admin modal
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'x') {
+      if (e.ctrlKey && e.shiftKey && (e.key.toLowerCase() === 'x' || e.code === 'KeyX' || e.key === 'ч' || e.key === 'Ч')) {
         e.preventDefault();
         setLoginStep(1);
         setAdminPassword('');
@@ -731,11 +731,7 @@ function App() {
               <img 
                 src="/logo.png" 
                 alt="Baku Services" 
-                className="h-10 md:h-12 w-auto object-contain rounded-lg border border-[#242624] hover:opacity-80 transition-opacity cursor-pointer" 
-                onDoubleClick={() => {
-                  navigateTo('/idare-paneli');
-                }}
-                title={t('doubleClickTitle')}
+                className="h-10 md:h-12 w-auto object-contain rounded-lg border border-[#242624]" 
               />
               <div className="cursor-pointer" onClick={() => setViewMode('showcase')}>
                 <h1 className="text-sm font-bold tracking-tight text-white font-display leading-tight">

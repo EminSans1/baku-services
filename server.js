@@ -9,6 +9,7 @@ const { body, validationResult } = require('express-validator');
 const { sequelize, User, Ad } = require('./db');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
 // Security HTTP Headers
@@ -220,7 +221,15 @@ app.post('/api/auth/login', validate(loginValidation), async (req, res) => {
 
 // --- ADMIN SECURITY & AUTHENTICATION ENHANCEMENTS ---
 
-// Strict Rate Limiting: max 3 attempts per hour, blocks for 1 hour (3600000 ms)
+// Separate rate limiters for Step 1 (verify-password) and Step 2 (login)
+// This ensures that hitting one endpoint doesn't exhaust the rate limit bucket of the other.
+const adminVerifyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  message: { error: 'Превышено число попыток входа. Пожалуйста, попробуйте через час.' },
+  statusCode: 429
+});
+
 const adminLoginLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 3,
@@ -241,7 +250,7 @@ const sendFailedAdminResponse = (req, res) => {
 };
 
 // Admin Login Step 1: Verify Password
-app.post('/api/admin/verify-password', adminLoginLimiter, (req, res) => {
+app.post('/api/admin/verify-password', adminVerifyLimiter, (req, res) => {
   const { password } = req.body;
   if (password === ADMIN_PASSWORD) {
     res.json({ success: true });
