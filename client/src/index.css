@@ -160,3 +160,85 @@
   filter: invert(1) hue-rotate(180deg) brightness(0.95);
   border-color: transparent !important;
 }
+
+
+/* ─── Mobile baseline ─────────────────────────────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Notch / safe-area paddings */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+
+/* Disable hover-lift translate on touch devices */
+@media (hover: none) {
+  .group.hover\:-translate-y-0\.5:active {
+    transform: none !important;
+  }
+}
+
+/* Hide motion for users who ask */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Drawer slide animation */
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-drawer-in {
+  animation: drawer-in 200ms ease-out;
+}
+
+@keyframes overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-overlay-fade-in {
+  animation: overlay-fade-in 200ms ease-out;
+}
+
+/* Min touch target on mobile */
+@media (max-width: 767px) {
+  button,
+  [role="button"],
+  a {
+    min-height: 36px;
+  }
+  /* But not for small tag-like buttons in chips/filters */
+  .filter-chip,
+  .tag-chip {
+    min-height: 28px;
+  }
+}
+
+
+/* Prevent iOS Safari from zooming on focus when input font-size < 16px */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

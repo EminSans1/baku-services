@@ -267,7 +267,7 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
       </button>
 
       {/* Main Content Card */}
-      <div className="grid md:grid-cols-2 gap-8 bg-[#171817] border border-[#242624] p-6 md:p-8 rounded-3xl shadow-xl">
+      <div className="grid md:grid-cols-2 gap-6 md:gap-8 bg-[#171817] border border-[#242624] p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-xl">
         
         {/* Left Column: Visual Image Block / Slider */}
         <div className="relative aspect-square md:aspect-auto md:h-[380px] rounded-2xl overflow-hidden border border-[#242624] bg-[#111211] flex items-center justify-center group/gallery">
@@ -276,6 +276,8 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
               <img 
                 src={resolveImageUrl(listing.images[activeImageIndex])} 
                 alt={`${listing.title} - ${activeImageIndex + 1}`} 
+                loading={activeImageIndex === 0 ? 'eager' : 'lazy'}
+                decoding="async"
                 className="w-full h-full object-cover transition-all duration-700 ease-out scale-100 hover:scale-105"
               />
               

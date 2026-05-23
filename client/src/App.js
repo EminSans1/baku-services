@@ -591,6 +591,7 @@ function App() {
   const [adminTypeFilter, setAdminTypeFilter] = useState('all');
   const [adminStats, setAdminStats] = useState({ services: 0, products: 0 });
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [sortBy, setSortBy] = useState('newest');
@@ -650,6 +651,21 @@ function App() {
   const [loginStep, setLoginStep] = useState(1);
   const [admin2faCode, setAdmin2faCode] = useState('');
   const [boardActive, setBoardActive] = useState(true);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isMobileMenuOpen]);
+
+  // Close drawer when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [viewMode]);
 
   const setViewMode = useCallback((mode) => {
     if (mode === 'showcase') navigateTo('/');
@@ -978,81 +994,35 @@ function App() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-[#111211] text-[#e2e8f0] font-sans selection:bg-[#c3d6cc] selection:text-[#111211] pb-16">
+    <div className="min-h-screen bg-[#111211] text-[#e2e8f0] font-sans selection:bg-[#c3d6cc] selection:text-[#111211] pb-8 md:pb-16">
       
-      {/* Top Navigation Bar matching reference */}
-      <header className="border-b border-[#242624] bg-[#111211]/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          
-          {/* Top Line: Logo/Title & Mobile Controls */}
-          <div className="flex items-center justify-between w-full md:w-auto">
-            {/* Logo Image & Name with secret Double Click */}
-            <div className="flex items-center gap-3 select-none">
-              <img 
-                src="/logo.png" 
-                alt="Baku Services" 
-                className="h-10 md:h-12 w-auto object-contain rounded-lg border border-[#242624]" 
-              />
-              <div className="cursor-pointer" onClick={() => setViewMode('showcase')}>
-                <h1 className="text-sm font-bold tracking-tight text-white font-display leading-tight">
-                  Baku Services
-                </h1>
-                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider leading-none mt-0.5">{t('bulletinBoard')}</p>
-              </div>
-            </div>
+      {/* ─── Top Navigation Bar ─── */}
+      <header className="border-b border-[#242624] bg-[#111211]/90 backdrop-blur-md sticky top-0 z-40 pt-safe">
+        <div className="max-w-6xl mx-auto px-3 md:px-4 py-2.5 md:py-3 flex items-center justify-between gap-3">
 
-            {/* Mobile-only Top Right controls: Language & Profile */}
-            <div className="flex items-center gap-2 md:hidden">
-              {/* Language Selector */}
-              <div className="flex items-center bg-[#171817] border border-[#242624] p-0.5 rounded-lg text-[9px] font-bold uppercase">
-                {['az', 'en', 'ru'].map(l => (
-                  <button
-                    key={l}
-                    onClick={() => {
-                      setLang(l);
-                      localStorage.setItem('baku_lang', l);
-                    }}
-                    className={`px-2 py-0.5 rounded-md transition-all ${
-                      lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-500 hover:text-slate-350'
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-              
-              <button
-                onClick={toggleTheme}
-                className="w-8 h-8 rounded-lg bg-[#171817] border border-[#242624] flex items-center justify-center text-xs hover:bg-[#242624] transition-all"
-                title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
-              >
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
-              
-              {/* User Icon/Login button */}
-              {user ? (
-                <button
-                  onClick={() => setViewMode('profile')}
-                  className="w-8 h-8 rounded-lg bg-[#242624] border border-[#c3d6cc]/40 flex items-center justify-center text-xs text-white"
-                >
-                  👤
-                </button>
-              ) : (
-                !isAdmin && (
-                  <button
-                    onClick={() => setViewMode('login')}
-                    className="px-3 py-1.5 bg-[#d2e2db] text-[#111211] text-[10px] font-bold rounded-lg transition-all"
-                  >
-                    {t('loginButtonHeader')}
-                  </button>
-                )
-              )}
+          {/* Logo */}
+          <button
+            type="button"
+            onClick={() => setViewMode('showcase')}
+            className="flex items-center gap-2.5 md:gap-3 select-none cursor-pointer min-w-0"
+          >
+            <img
+              src="/logo.png"
+              alt="Baku Services"
+              className="h-9 md:h-12 w-auto object-contain rounded-lg border border-[#242624] flex-shrink-0"
+            />
+            <div className="text-left min-w-0">
+              <h1 className="text-sm font-bold tracking-tight text-white font-display leading-tight truncate">
+                Baku Services
+              </h1>
+              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider leading-none mt-0.5 truncate">
+                {t('bulletinBoard')}
+              </p>
             </div>
-          </div>
+          </button>
 
-          {/* Desktop-only Navigation & Header Controls */}
-          <div className="hidden md:flex items-center gap-6">
-            {/* Menu Items */}
+          {/* Desktop controls */}
+          <div className="hidden md:flex items-center gap-3">
             <nav className="flex items-center gap-1 bg-[#171817] border border-[#242624] p-1 rounded-xl">
               <button
                 onClick={() => setViewMode('showcase')}
@@ -1079,191 +1049,301 @@ function App() {
               )}
             </nav>
 
-            {/* Language Switcher & Controls */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center bg-[#171817] border border-[#242624] p-1 rounded-xl">
-                {['az', 'en', 'ru'].map(l => (
-                  <button
-                    key={l}
-                    onClick={() => {
-                      setLang(l);
-                      localStorage.setItem('baku_lang', l);
-                    }}
-                    className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg transition-all ${
-                      lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-500 hover:text-slate-300'
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={toggleTheme}
-                className="w-8 h-8 rounded-xl bg-[#171817] border border-[#242624] flex items-center justify-center text-xs hover:bg-[#242624] transition-all cursor-pointer"
-                title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
-              >
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
-
-              {/* Indicator Badge */}
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-[#171817] border border-[#242624] rounded-xl text-[10px] font-bold uppercase tracking-wider text-[#c3d6cc]">
-                <span className={`w-1.5 h-1.5 rounded-full ${boardActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                <span>{boardActive ? t('boardOpenBadge') : t('postingDisabledBadge')}</span>
-              </div>
-
-              {/* Post Service button */}
-              {viewMode === 'showcase' && (
+            <div className="flex items-center bg-[#171817] border border-[#242624] p-1 rounded-xl">
+              {['az', 'en', 'ru'].map(l => (
                 <button
-                  onClick={() => setIsFormOpen(!isFormOpen)}
-                  className={`flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 border border-[#242624] ${
-                    isFormOpen
-                      ? 'bg-[#242624] text-[#e2e8f0]'
-                      : 'bg-[#d2e2db] text-[#111211] hover:bg-[#c3d6cc]'
+                  key={l}
+                  onClick={() => {
+                    setLang(l);
+                    localStorage.setItem('baku_lang', l);
+                  }}
+                  className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg transition-all ${
+                    lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-500 hover:text-slate-300'
                   }`}
+                  aria-label={`Switch to ${l.toUpperCase()}`}
                 >
-                  {isFormOpen ? t('hideFormBtn') : t('postServiceBtn')}
+                  {l}
                 </button>
-              )}
-
-              {/* Session Buttons */}
-              {user ? (
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setViewMode('profile')}
-                    className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 border rounded-xl transition-all cursor-pointer ${
-                      viewMode === 'profile'
-                        ? 'bg-[#242624] border-[#c3d6cc] text-white'
-                        : 'bg-[#171817] border-[#242624] hover:bg-[#242624] text-[#c3d6cc] hover:text-white'
-                    }`}
-                  >
-                    👤 {user.fullname.split(' ')[0]}
-                  </button>
-                  <button
-                    onClick={logoutUser}
-                    className="px-4 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
-                  >
-                    {t('logoutButtonHeader')}
-                  </button>
-                </div>
-              ) : (
-                !isAdmin && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setViewMode('login')}
-                      className="px-4 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-[#c3d6cc] text-xs font-bold rounded-xl transition-all cursor-pointer"
-                    >
-                      {t('loginButtonHeader')}
-                    </button>
-                    <button
-                      onClick={() => setViewMode('register')}
-                      className="px-4 py-2 bg-[#d2e2db] hover:bg-[#c3d6cc] text-[#111211] text-xs font-bold rounded-xl transition-all cursor-pointer"
-                    >
-                      {t('registerButtonHeader')}
-                    </button>
-                  </div>
-                )
-              )}
-
-              {isAdmin && (
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 border border-rose-950/40 bg-rose-950/10 hover:bg-rose-950/30 text-rose-450 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                >
-                  {t('logoutBtn')}
-                </button>
-              )}
+              ))}
             </div>
-          </div>
 
-          {/* Mobile-only Navigation Tabs Row */}
-          <div className="flex md:hidden items-center justify-between w-full pt-1 border-t border-[#242624]/40 mt-1">
-            <nav className="flex items-center gap-1 bg-[#171817] border border-[#242624] p-0.5 rounded-lg w-full">
+            <button
+              onClick={toggleTheme}
+              className="w-9 h-9 rounded-xl bg-[#171817] border border-[#242624] flex items-center justify-center text-xs hover:bg-[#242624] transition-all cursor-pointer"
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              title={theme === 'dark' ? 'Light Theme' : 'Dark Theme'}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+
+            {viewMode === 'showcase' && (user || isAdmin) && (
               <button
-                onClick={() => setViewMode('showcase')}
-                className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
-                  viewMode === 'showcase'
-                    ? 'bg-[#d2e2db] text-[#111211]'
-                    : 'text-[#c3d6cc]'
+                onClick={() => setIsFormOpen(!isFormOpen)}
+                className={`text-xs font-bold px-4 py-2 rounded-xl transition-all duration-200 border border-[#242624] ${
+                  isFormOpen
+                    ? 'bg-[#242624] text-[#e2e8f0]'
+                    : 'bg-[#d2e2db] text-[#111211] hover:bg-[#c3d6cc]'
                 }`}
               >
-                {t('showcase')}
+                {isFormOpen ? t('hideFormBtn') : t('postServiceBtn')}
               </button>
-              {user && (
+            )}
+
+            {user ? (
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setViewMode('profile')}
-                  className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 border rounded-xl transition-all cursor-pointer ${
                     viewMode === 'profile'
-                      ? 'bg-[#d2e2db] text-[#111211]'
-                      : 'text-[#c3d6cc]'
+                      ? 'bg-[#242624] border-[#c3d6cc] text-white'
+                      : 'bg-[#171817] border-[#242624] hover:bg-[#242624] text-[#c3d6cc] hover:text-white'
                   }`}
                 >
-                  {lang === 'ru' ? 'Кабинет' : lang === 'en' ? 'Profile' : 'Kabinet'}
+                  👤 {user.fullname.split(' ')[0]}
                 </button>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={() => setViewMode('admin')}
-                  className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1 ${
-                    viewMode === 'admin'
-                      ? 'bg-[#d2e2db] text-[#111211]'
-                      : 'text-[#c3d6cc]'
-                  }`}
-                >
-                  <span>{t('adminPanel')}</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                </button>
-              )}
-              {user && (
                 <button
                   onClick={logoutUser}
-                  className="px-3 py-2 text-[11px] font-bold text-slate-500 rounded-md"
+                  className="px-3 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
                 >
-                  {lang === 'ru' ? 'Выйти' : lang === 'en' ? 'Logout' : 'Çıxış'}
+                  {t('logoutButtonHeader')}
                 </button>
-              )}
-              {!user && !isAdmin && (
-                <>
+              </div>
+            ) : (
+              !isAdmin && (
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => setViewMode('login')}
-                    className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
-                      viewMode === 'login'
-                        ? 'bg-[#d2e2db] text-[#111211]'
-                        : 'text-[#c3d6cc]'
-                    }`}
+                    className="px-3 py-2 border border-[#242624] bg-[#171817] hover:bg-[#242624] text-[#c3d6cc] text-xs font-bold rounded-xl transition-all cursor-pointer"
                   >
                     {t('loginButtonHeader')}
                   </button>
                   <button
                     onClick={() => setViewMode('register')}
-                    className={`flex-1 text-center py-2 text-[11px] font-bold rounded-md transition-all ${
-                      viewMode === 'register'
-                        ? 'bg-[#d2e2db] text-[#111211]'
-                        : 'text-[#c3d6cc]'
-                    }`}
+                    className="px-3 py-2 bg-[#d2e2db] hover:bg-[#c3d6cc] text-[#111211] text-xs font-bold rounded-xl transition-all cursor-pointer"
                   >
                     {t('registerButtonHeader')}
                   </button>
-                </>
-              )}
-              {isAdmin && (
-                <button
-                  onClick={handleLogout}
-                  className="px-3 py-2 text-[11px] font-bold text-rose-400 rounded-md"
-                >
-                  {t('logoutBtn')}
-                </button>
-              )}
-            </nav>
+                </div>
+              )
+            )}
+
+            {isAdmin && (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-2 border border-rose-950/40 bg-rose-950/10 hover:bg-rose-950/30 text-rose-450 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                {t('logoutBtn')}
+              </button>
+            )}
           </div>
 
+          {/* Mobile compact controls: primary CTA + burger */}
+          <div className="flex md:hidden items-center gap-2">
+            {viewMode === 'showcase' && (user || isAdmin) && (
+              <button
+                onClick={() => setIsFormOpen(!isFormOpen)}
+                className={`flex items-center justify-center text-[11px] font-bold px-3 h-9 rounded-lg transition-all border ${
+                  isFormOpen
+                    ? 'bg-[#242624] border-[#242624] text-[#e2e8f0]'
+                    : 'bg-[#d2e2db] border-[#c3d6cc] text-[#111211]'
+                }`}
+                aria-label={isFormOpen ? t('hideFormBtn') : t('postServiceBtn')}
+              >
+                {isFormOpen ? '×' : '+'}
+              </button>
+            )}
+            {!user && !isAdmin && (
+              <button
+                onClick={() => setViewMode('login')}
+                className="text-[11px] font-bold px-3 h-9 rounded-lg bg-[#d2e2db] text-[#111211]"
+              >
+                {t('loginButtonHeader')}
+              </button>
+            )}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="w-9 h-9 rounded-lg bg-[#171817] border border-[#242624] flex items-center justify-center text-slate-300"
+              aria-label="Open menu"
+              aria-expanded={isMobileMenuOpen}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         </div>
-
       </header>
+
+      {/* ─── Mobile Drawer ─── */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-overlay-fade-in"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          <aside className="relative ml-auto w-[82%] max-w-xs h-full bg-[#111211] border-l border-[#242624] flex flex-col animate-drawer-in pt-safe pb-safe">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#242624]">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                {lang === 'ru' ? 'Меню' : lang === 'en' ? 'Menu' : 'Menyu'}
+              </span>
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-9 h-9 rounded-lg bg-[#171817] border border-[#242624] flex items-center justify-center text-slate-400"
+                aria-label="Close menu"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+              {/* Account block */}
+              {user ? (
+                <button
+                  onClick={() => setViewMode('profile')}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-[#171817] border border-[#242624] text-left"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#242624] text-[#e2e8f0] font-bold text-sm flex items-center justify-center font-display uppercase">
+                    {user.fullname.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{user.fullname}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                  </div>
+                </button>
+              ) : !isAdmin && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setViewMode('login')}
+                    className="py-2.5 border border-[#242624] bg-[#171817] text-[#c3d6cc] text-xs font-bold rounded-xl"
+                  >
+                    {t('loginButtonHeader')}
+                  </button>
+                  <button
+                    onClick={() => setViewMode('register')}
+                    className="py-2.5 bg-[#d2e2db] text-[#111211] text-xs font-bold rounded-xl"
+                  >
+                    {t('registerButtonHeader')}
+                  </button>
+                </div>
+              )}
+
+              {/* Navigation */}
+              <nav className="space-y-1">
+                <button
+                  onClick={() => setViewMode('showcase')}
+                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                    viewMode === 'showcase'
+                      ? 'bg-[#d2e2db] text-[#111211]'
+                      : 'text-[#c3d6cc] hover:bg-[#171817]'
+                  }`}
+                >
+                  {t('showcase')}
+                </button>
+                {user && (
+                  <button
+                    onClick={() => setViewMode('profile')}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                      viewMode === 'profile'
+                        ? 'bg-[#d2e2db] text-[#111211]'
+                        : 'text-[#c3d6cc] hover:bg-[#171817]'
+                    }`}
+                  >
+                    {lang === 'ru' ? 'Кабинет' : lang === 'en' ? 'Profile' : 'Kabinet'}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={() => setViewMode('admin')}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all flex items-center justify-between ${
+                      viewMode === 'admin'
+                        ? 'bg-[#d2e2db] text-[#111211]'
+                        : 'text-[#c3d6cc] hover:bg-[#171817]'
+                    }`}
+                  >
+                    <span>{t('adminPanel')}</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  </button>
+                )}
+              </nav>
+
+              {/* Settings */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1">
+                  {lang === 'ru' ? 'Настройки' : lang === 'en' ? 'Settings' : 'Tənzimləmə'}
+                </p>
+
+                <div>
+                  <p className="text-[10px] text-slate-500 mb-1.5 px-1">
+                    {lang === 'ru' ? 'Язык' : lang === 'en' ? 'Language' : 'Dil'}
+                  </p>
+                  <div className="flex items-center bg-[#171817] border border-[#242624] p-1 rounded-xl">
+                    {['az', 'en', 'ru'].map(l => (
+                      <button
+                        key={l}
+                        onClick={() => {
+                          setLang(l);
+                          localStorage.setItem('baku_lang', l);
+                        }}
+                        className={`flex-1 py-2 text-[11px] font-bold uppercase rounded-lg transition-all ${
+                          lang === l ? 'bg-[#d2e2db] text-[#111211]' : 'text-slate-400'
+                        }`}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={toggleTheme}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#171817] border border-[#242624] text-sm text-slate-300"
+                >
+                  <span>{lang === 'ru' ? 'Тема' : lang === 'en' ? 'Theme' : 'Tema'}</span>
+                  <span>{theme === 'dark' ? '☀️ Light' : '🌙 Dark'}</span>
+                </button>
+
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-[#171817] border border-[#242624] text-xs">
+                  <span className="text-slate-400">{t('boardStatus')}</span>
+                  <span className="flex items-center gap-1.5 text-[#c3d6cc] font-bold uppercase tracking-wider text-[10px]">
+                    <span className={`w-1.5 h-1.5 rounded-full ${boardActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                    {boardActive ? t('boardOpenBadge') : t('postingDisabledBadge')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer actions */}
+            {(user || isAdmin) && (
+              <div className="px-5 py-4 border-t border-[#242624] space-y-2">
+                {user && (
+                  <button
+                    onClick={logoutUser}
+                    className="w-full py-2.5 border border-[#242624] bg-[#171817] text-slate-300 text-xs font-bold rounded-xl"
+                  >
+                    {t('logoutButtonHeader')}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={handleLogout}
+                    className="w-full py-2.5 border border-rose-950/40 bg-rose-950/10 text-rose-400 text-xs font-bold rounded-xl"
+                  >
+                    {t('logoutBtn')}
+                  </button>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl border shadow-2xl transition-all duration-300 transform translate-y-0 ${
+        <div className={`fixed bottom-4 left-3 right-3 md:left-auto md:right-5 md:bottom-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl border shadow-2xl transition-all duration-300 transform translate-y-0 pb-safe ${
           notification.type === 'error' 
             ? 'bg-rose-950/90 border-rose-800 text-rose-200' 
             : 'bg-[#171817] border-emerald-800 text-emerald-300'
@@ -1274,7 +1354,7 @@ function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="max-w-6xl mx-auto px-4 mt-8">
+      <main className="max-w-6xl mx-auto px-3 md:px-4 mt-4 md:mt-8">
 
         {/* DETAILED LISTING VIEW */}
         {viewMode === 'detail' && (
@@ -1316,7 +1396,7 @@ function App() {
             <div className={`transition-all duration-300 overflow-hidden ${
               isFormOpen ? 'max-h-[850px] opacity-100 mb-8' : 'max-h-0 opacity-0 pointer-events-none'
             }`}>
-              <div className="bg-[#171817] border border-[#242624] p-6 rounded-2xl shadow-xl max-w-2xl mx-auto">
+              <div className="bg-[#171817] border border-[#242624] p-4 md:p-6 rounded-2xl shadow-xl max-w-2xl mx-auto">
                 <h2 className="text-lg font-bold font-display text-white mb-5 flex items-center gap-2">
                   <span>✨</span> {t('postNewServiceTitle')}
                 </h2>
@@ -1601,25 +1681,28 @@ function App() {
                 </button>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+              <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-center justify-between">
                 
                 {/* Search */}
                 <div className="relative w-full md:w-80">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </span>
                   <input
-                    className="w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl pl-11 pr-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 outline-none transition-all"
+                    className="w-full bg-[#111211] border border-[#242624] focus:border-[#c3d6cc] rounded-xl pl-10 pr-4 py-3 md:py-2.5 text-sm md:text-xs text-slate-100 placeholder-slate-500 outline-none transition-all"
                     placeholder={t('findMasterPlaceholder')}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
+                    type="search"
+                    inputMode="search"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-2"
+                      aria-label="Clear search"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -1629,12 +1712,13 @@ function App() {
                 </div>
 
                 {/* Sort */}
-                <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{t('sortBy')}</span>
+                <div className="flex items-center gap-2 md:gap-2.5 w-full md:w-auto justify-between md:justify-end">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider md:block hidden">{t('sortBy')}</span>
                   <select
-                    className="bg-[#111211] border border-[#242624] rounded-xl px-3 py-2 text-xs text-[#c3d6cc] outline-none transition-all cursor-pointer focus:border-[#c3d6cc]"
+                    className="flex-1 md:flex-initial bg-[#111211] border border-[#242624] rounded-xl px-3 py-2.5 md:py-2 text-xs text-[#c3d6cc] outline-none transition-all cursor-pointer focus:border-[#c3d6cc]"
                     value={sortBy}
                     onChange={e => setSortBy(e.target.value)}
+                    aria-label={t('sortBy')}
                   >
                     <option value="newest">{t('sortNewest')}</option>
                     <option value="oldest">{t('sortOldest')}</option>
@@ -1718,17 +1802,19 @@ function App() {
                   return (
                     <div 
                       key={ad.id} 
-                      className="group bg-[#171817] border border-[#242624] hover:border-slate-700 rounded-2xl p-6 shadow-md hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between cursor-pointer"
+                      className="group bg-[#171817] border border-[#242624] hover:border-slate-700 rounded-2xl p-4 md:p-6 shadow-md md:hover:-translate-y-0.5 transition-all duration-300 flex flex-col justify-between cursor-pointer"
                       onClick={() => navigateTo('/listing/' + ad.id)}
                     >
                       <div>
                         {/* Listing Image Cover & Badges */}
-                        <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden border border-[#242624] bg-[#111211] mb-5 flex items-center justify-center group-hover:border-slate-700 transition-all duration-300">
+                        <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden border border-[#242624] bg-[#111211] mb-4 md:mb-5 flex items-center justify-center group-hover:border-slate-700 transition-all duration-300">
                           {parsedImages && parsedImages.length > 0 ? (
                             <img 
                               src={resolveImageUrl(parsedImages[0])} 
                               alt={ad.title} 
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover md:group-hover:scale-105 transition-transform duration-500" 
                             />
                           ) : (
                             <div className="flex flex-col items-center justify-center text-slate-650 opacity-40">
