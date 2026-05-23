@@ -15,7 +15,8 @@ function Login({ t, setViewMode, showToast }) {
 
     try {
       const res = await axios.post('/api/auth/login', { email, password });
-      loginUser(res.data.token, res.data.user);
+      // Server set the httpOnly session cookie. We just sync the user state.
+      loginUser(res.data.user);
       showToast(t('loginSuccessToast') || 'Success');
       setViewMode('showcase');
     } catch (err) {
@@ -51,6 +52,7 @@ function Login({ t, setViewMode, showToast }) {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoFocus
+            autoComplete="email"
           />
         </div>
 
@@ -65,6 +67,7 @@ function Login({ t, setViewMode, showToast }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            autoComplete="current-password"
           />
         </div>
 

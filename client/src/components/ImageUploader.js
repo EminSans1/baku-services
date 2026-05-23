@@ -7,7 +7,6 @@ function ImageUploader({
   onChange,
   maxImages = 5,
   t,
-  getAuthHeaders,
   showToast,
   lang
 }) {
@@ -52,10 +51,7 @@ function ImageUploader({
     setIsUploading(true);
     try {
       const res = await axios.post('/api/upload/ad-image', formData, {
-        headers: {
-          ...getAuthHeaders().headers,
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data.success && res.data.urls) {
         onChange([...images, ...res.data.urls]);

@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { resolveImageUrl } from '../utils/imageUrl';
 
-function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslation }) {
+function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslation, user }) {
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showContacts, setShowContacts] = useState(false);
+  const [contacts, setContacts] = useState(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
@@ -25,6 +27,31 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
     };
     fetchListing();
   }, [id, t]);
+
+  const requestContacts = async () => {
+    if (!user) {
+      const msg = lang === 'ru'
+        ? 'Войдите в аккаунт, чтобы увидеть контакты автора.'
+        : lang === 'en'
+          ? 'Log in to view the author\'s contacts.'
+          : 'Əlaqə məlumatlarını görmək üçün hesaba daxil olun.';
+      showToast(msg, 'error');
+      navigateTo('/login');
+      return;
+    }
+    try {
+      setContactsLoading(true);
+      const res = await axios.get(`/api/listings/${id}/contacts`);
+      setContacts(res.data || {});
+      setShowContacts(true);
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || (lang === 'ru' ? 'Не удалось получить контакты' : lang === 'en' ? 'Failed to load contacts' : 'Əlaqə məlumatları yüklənmədi');
+      showToast(errMsg, 'error');
+    } finally {
+      setContactsLoading(false);
+    }
+  };
 
   const getL = (key, fallback) => {
     if (t && t(key) && t(key) !== key) return t(key);
@@ -400,20 +427,23 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
             {/* Contacts slide toggle */}
             {!showContacts ? (
               <button
-                onClick={() => setShowContacts(true)}
-                className="w-full bg-[#d2e2db] hover:bg-[#c3d6cc] text-[#111211] font-bold py-3.5 rounded-xl transition-all text-xs uppercase tracking-wider cursor-pointer shadow-lg shadow-black/10"
+                onClick={requestContacts}
+                disabled={contactsLoading}
+                className="w-full bg-[#d2e2db] hover:bg-[#c3d6cc] disabled:bg-slate-700 disabled:text-slate-400 text-[#111211] font-bold py-3.5 rounded-xl transition-all text-xs uppercase tracking-wider cursor-pointer shadow-lg shadow-black/10"
               >
-                {lang === 'ru' ? 'Показать контакты' : lang === 'en' ? 'Show contacts' : 'Əlaqə məlumatlarını göstər'}
+                {contactsLoading
+                  ? '...'
+                  : (lang === 'ru' ? 'Показать контакты' : lang === 'en' ? 'Show contacts' : 'Əlaqə məlumatlarını göstər')}
               </button>
             ) : (
               <div className="space-y-2.5 animate-fadeIn">
-                {listing.phone && (
+                {contacts?.phone && (
                   <div className="flex items-center justify-between bg-[#111211] px-4 py-3 rounded-xl border border-[#242624] text-xs">
                     <span className="text-slate-500">{lang === 'ru' ? 'Телефон:' : lang === 'en' ? 'Phone:' : 'Telefon:'}</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-200">{listing.phone}</span>
+                      <span className="font-bold text-slate-200">{contacts.phone}</span>
                       <button
-                        onClick={() => copyToClipboard(listing.phone, 'phone')}
+                        onClick={() => copyToClipboard(contacts.phone, 'phone')}
                         className="text-slate-400 hover:text-[#c3d6cc] transition-colors p-1"
                         title="Copy Phone"
                       >
@@ -424,13 +454,13 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
                     </div>
                   </div>
                 )}
-                {listing.email && (
+                {contacts?.email && (
                   <div className="flex items-center justify-between bg-[#111211] px-4 py-3 rounded-xl border border-[#242624] text-xs">
                     <span className="text-slate-500">Email:</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-200">{listing.email}</span>
+                      <span className="font-bold text-slate-200">{contacts.email}</span>
                       <button
-                        onClick={() => copyToClipboard(listing.email, 'email')}
+                        onClick={() => copyToClipboard(contacts.email, 'email')}
                         className="text-slate-400 hover:text-[#c3d6cc] transition-colors p-1"
                         title="Copy Email"
                       >
@@ -441,7 +471,7 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
                     </div>
                   </div>
                 )}
-                {!listing.phone && !listing.email && (
+                {!contacts?.phone && !contacts?.email && (
                   <p className="text-center text-slate-500 text-xs py-2">
                     {lang === 'ru' ? 'Контакты не указаны' : lang === 'en' ? 'No contact details available' : 'Əlaqə məlumatı tapılmadı'}
                   </p>

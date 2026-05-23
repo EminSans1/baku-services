@@ -665,8 +665,10 @@ function App() {
     const handleLocationChange = () => {
       const path = window.location.pathname;
       if (path === '/idare-paneli') {
-        const token = localStorage.getItem('baku_admin_token');
-        if (!token) {
+        // The admin session lives in an httpOnly cookie. We can't read it
+        // from JS — we just route to admin and let isAdmin (set via
+        // /api/admin/me on boot) gate the actual UI.
+        if (!isAdminRef.current) {
           setLoginStep(1);
           setAdminPassword('');
           setAdmin2faCode('');
@@ -698,6 +700,7 @@ function App() {
 
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Editing state
@@ -706,18 +709,6 @@ function App() {
   const showToast = useCallback((message, type = 'success') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
-  }, []);
-
-  const getAuthHeaders = useCallback(() => {
-    const adminToken = localStorage.getItem('baku_admin_token');
-    if (adminToken) {
-      return { headers: { Authorization: `Bearer ${adminToken}` } };
-    }
-    const userToken = localStorage.getItem('baku_user_token');
-    if (userToken) {
-      return { headers: { Authorization: `Bearer ${userToken}` } };
-    }
-    return {};
   }, []);
 
   const fetchAds = useCallback(async () => {
@@ -741,21 +732,31 @@ function App() {
 
   const fetchAdminStats = useCallback(async () => {
     try {
-      const res = await axios.get('/api/admin/stats', getAuthHeaders());
+      const res = await axios.get('/api/admin/stats');
       setAdminStats(res.data);
     } catch (err) {
       console.error('Admin stats error:', err);
     }
-  }, [getAuthHeaders]);
+  }, []);
+
+  // Keep a ref to isAdmin so the popstate handler reads the latest value
+  // without re-binding.
+  const isAdminRef = React.useRef(false);
+  useEffect(() => { isAdminRef.current = isAdmin; }, [isAdmin]);
 
   useEffect(() => {
     fetchAds();
     fetchBoardStatus();
-    const token = localStorage.getItem('baku_admin_token');
-    if (token) {
-      setIsAdmin(true);
-      fetchAdminStats();
-    }
+    // Ask the server whether we already have an admin session cookie.
+    (async () => {
+      try {
+        const res = await axios.get('/api/admin/me');
+        if (res.data && res.data.admin) {
+          setIsAdmin(true);
+          fetchAdminStats();
+        }
+      } catch (_) { /* ignore */ }
+    })();
   }, [fetchAds, fetchBoardStatus, fetchAdminStats]);
 
   useEffect(() => {
@@ -786,7 +787,7 @@ function App() {
       if (user) {
         payload.name = user.fullname;
       }
-      await axios.post('/api/ads', payload, getAuthHeaders());
+      await axios.post('/api/ads', payload);
       setForm({
         name: '',
         title: '',
@@ -824,7 +825,7 @@ function App() {
         images: parseAdImages(editingAd.images),
         name: editingAd.name
       };
-      await axios.put(`/api/ads/${editingAd.id}`, payload, getAuthHeaders());
+      await axios.put(`/api/ads/${editingAd.id}`, payload);
       setEditingAd(null);
       fetchAds();
       showToast(t('toastEditSuccess'));
@@ -838,7 +839,7 @@ function App() {
   const deleteAd = async (id) => {
     if (!window.confirm(t('deleteConfirm'))) return;
     try {
-      await axios.delete(`/api/ads/${id}`, getAuthHeaders());
+      await axios.delete(`/api/ads/${id}`);
       fetchAds();
       showToast(t('toastDeleteSuccess'));
     } catch (err) {
@@ -864,7 +865,6 @@ function App() {
       try {
         const res = await axios.post('/api/admin/login', { password: adminPassword, code: admin2faCode });
         if (res.data.success) {
-          localStorage.setItem('baku_admin_token', res.data.token);
           setIsAdmin(true);
           fetchAdminStats();
           setIsLoginModalOpen(false);
@@ -882,8 +882,10 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('baku_admin_token');
+  const handleLogout = async () => {
+    try {
+      await axios.post('/api/admin/logout');
+    } catch (_) { /* ignore */ }
     setIsAdmin(false);
     setViewMode('showcase');
     showToast(t('toastLogoutSuccess'));
@@ -891,7 +893,7 @@ function App() {
 
   const toggleBoardStatus = async (checked) => {
     try {
-      const res = await axios.post('/api/admin/toggle-board', { active: checked }, getAuthHeaders());
+      const res = await axios.post('/api/admin/toggle-board', { active: checked });
       setBoardActive(res.data.active);
       showToast(res.data.active ? t('toastToggleBoard') : t('toastToggleBoardOff'));
     } catch (err) {
@@ -1283,6 +1285,7 @@ function App() {
             lang={lang}
             showToast={showToast}
             getCategoryTranslation={getCategoryTranslation}
+            user={user}
           />
         )}
 
@@ -1295,7 +1298,6 @@ function App() {
             lang={lang}
             showToast={showToast}
             getCategoryTranslation={getCategoryTranslation}
-            getAuthHeaders={getAuthHeaders}
             openCreateForm={() => setIsFormOpen(true)}
           />
         )}
@@ -1527,7 +1529,6 @@ function App() {
                       images={form.images || []}
                       onChange={(images) => setForm({ ...form, images })}
                       t={t}
-                      getAuthHeaders={getAuthHeaders}
                       showToast={showToast}
                       lang={lang}
                     />
@@ -2425,7 +2426,6 @@ function App() {
                 images={parseAdImages(editingAd.images)}
                 onChange={(images) => setEditingAd({ ...editingAd, images })}
                 t={t}
-                getAuthHeaders={getAuthHeaders}
                 showToast={showToast}
                 lang={lang}
               />

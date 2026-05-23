@@ -1,6 +1,7 @@
 import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
+
 function Register({ t, setViewMode, showToast, lang }) {
   const { loginUser } = useContext(AuthContext);
   const [fullname, setFullname] = useState('');
@@ -37,15 +38,12 @@ function Register({ t, setViewMode, showToast, lang }) {
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  const uploadAvatar = async (token) => {
+  const uploadAvatar = async () => {
     if (!avatarFile) return null;
     const formData = new FormData();
     formData.append('avatar', avatarFile);
     const res = await axios.post('/api/upload/avatar', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${token}`
-      }
+      headers: { 'Content-Type': 'multipart/form-data' }
     });
     return res.data?.url || null;
   };
@@ -70,11 +68,10 @@ function Register({ t, setViewMode, showToast, lang }) {
       });
 
       let user = res.data.user;
-      const token = res.data.token;
 
       if (avatarFile) {
         try {
-          const avatarUrl = await uploadAvatar(token);
+          const avatarUrl = await uploadAvatar();
           if (avatarUrl) {
             user = { ...user, avatar_url: avatarUrl };
           }
@@ -84,7 +81,7 @@ function Register({ t, setViewMode, showToast, lang }) {
         }
       }
 
-      loginUser(token, user);
+      loginUser(user);
       showToast(t('registerSuccessToast') || 'Success');
       setViewMode('showcase');
     } catch (err) {
@@ -142,6 +139,7 @@ function Register({ t, setViewMode, showToast, lang }) {
             value={fullname}
             onChange={(e) => setFullname(e.target.value)}
             required
+            autoComplete="name"
           />
         </div>
 
@@ -156,6 +154,7 @@ function Register({ t, setViewMode, showToast, lang }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
           />
         </div>
 
@@ -169,6 +168,7 @@ function Register({ t, setViewMode, showToast, lang }) {
             placeholder="+994 (50) 123-4567"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
           />
         </div>
 
@@ -183,6 +183,8 @@ function Register({ t, setViewMode, showToast, lang }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            autoComplete="new-password"
+            minLength={8}
           />
         </div>
 
@@ -197,6 +199,8 @@ function Register({ t, setViewMode, showToast, lang }) {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
+            autoComplete="new-password"
+            minLength={8}
           />
         </div>
 

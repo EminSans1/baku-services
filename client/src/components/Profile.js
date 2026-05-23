@@ -3,19 +3,19 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { resolveImageUrl } from '../utils/imageUrl';
 
-function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation, getAuthHeaders, openCreateForm }) {
+function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation, openCreateForm }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [avatarLoading, setAvatarLoading] = useState(false);
 
-  const { token, loginUser } = useContext(AuthContext);
+  const { loginUser } = useContext(AuthContext);
 
   const fetchMyListings = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/listings/my', getAuthHeaders());
+      const res = await axios.get('/api/listings/my');
       setListings(res.data);
     } catch (err) {
       console.error(err);
@@ -37,7 +37,7 @@ function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation,
   const handleDelete = async (id) => {
     try {
       setDeletingId(id);
-      await axios.delete(`/api/listings/${id}`, getAuthHeaders());
+      await axios.delete(`/api/listings/${id}`);
       showToast(lang === 'az' ? 'Elan uğurla silindi!' : lang === 'en' ? 'Listing deleted successfully!' : 'Объявление успешно удалено!', 'success');
       setConfirmDeleteId(null);
       // Refresh list
@@ -73,14 +73,11 @@ function Profile({ user, t, navigateTo, lang, showToast, getCategoryTranslation,
     try {
       setAvatarLoading(true);
       const res = await axios.post('/api/upload/avatar', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (res.data && res.data.url) {
-        loginUser(token, { ...user, avatar_url: res.data.url });
+        loginUser({ ...user, avatar_url: res.data.url });
         showToast(lang === 'az' ? 'Profil şəkli yeniləndi!' : lang === 'en' ? 'Profile picture updated!' : 'Аватар успешно обновлен!', 'success');
       }
     } catch (err) {

@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { resolveImageUrl } from '../utils/imageUrl';
 
-function AvatarUploader({ avatarUrl, fullname, onUploaded, token, showToast, lang, t }) {
+function AvatarUploader({ avatarUrl, fullname, onUploaded, showToast, lang, t }) {
   const [loading, setLoading] = useState(false);
 
   const handleChange = async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
-    if (!file || !token) return;
+    if (!file) return;
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
@@ -32,10 +32,7 @@ function AvatarUploader({ avatarUrl, fullname, onUploaded, token, showToast, lan
     setLoading(true);
     try {
       const res = await axios.post('/api/upload/avatar', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`
-        }
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data?.url) {
         onUploaded(res.data.url);
@@ -72,7 +69,7 @@ function AvatarUploader({ avatarUrl, fullname, onUploaded, token, showToast, lan
           accept="image/jpeg,image/png,image/webp"
           className="hidden"
           onChange={handleChange}
-          disabled={loading || !token}
+          disabled={loading}
         />
       </label>
     </div>

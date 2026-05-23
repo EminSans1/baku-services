@@ -2,7 +2,9 @@ const { Sequelize } = require('sequelize');
 
 let sequelize;
 
-if (process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL) {
+const useSqlite = process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL;
+
+if (useSqlite) {
   // Use SQLite for local development
   sequelize = new Sequelize({
     dialect: 'sqlite',
@@ -11,19 +13,30 @@ if (process.env.USE_SQLITE === 'true' || !process.env.DATABASE_URL) {
   });
   console.log('Database: Using SQLite (db.sqlite)');
 } else {
-  // Use PostgreSQL for production (Render)
+  // Use PostgreSQL for production (e.g. Render)
+  // SSL is enforced by default. Set PG_SSL_REJECT_UNAUTHORIZED=false ONLY if your
+  // managed provider does not expose its CA chain. Prefer providing PG_CA_CERT.
+  const rejectUnauthorized = process.env.PG_SSL_REJECT_UNAUTHORIZED !== 'false';
+  const sslConfig = {
+    require: true,
+    rejectUnauthorized
+  };
+  if (process.env.PG_CA_CERT) {
+    sslConfig.ca = process.env.PG_CA_CERT;
+    sslConfig.rejectUnauthorized = true;
+  }
+
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
     protocol: 'postgres',
-    dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false
-      }
-    },
+    dialectOptions: { ssl: sslConfig },
     logging: false
   });
-  console.log('Database: Using PostgreSQL (DATABASE_URL)');
+  console.log(
+    `Database: Using PostgreSQL (DATABASE_URL, rejectUnauthorized=${sslConfig.rejectUnauthorized}${
+      process.env.PG_CA_CERT ? ', custom CA' : ''
+    })`
+  );
 }
 
 // Define User model
@@ -52,6 +65,20 @@ const User = sequelize.define('User', {
   avatar_url: {
     type: Sequelize.STRING,
     allowNull: true
+  },
+  failed_login_count: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
+  locked_until: {
+    type: Sequelize.DATE,
+    allowNull: true
+  },
+  token_version: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0
   }
 }, {
   tableName: 'users',
@@ -136,40 +163,46 @@ async function syncDatabase() {
     }
   };
 
-  // Add avatar_url to users
+  // User columns
   await safeAddColumn('users', 'avatar_url', {
     type: Sequelize.STRING,
     allowNull: true
   });
+  await safeAddColumn('users', 'failed_login_count', {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  });
+  await safeAddColumn('users', 'locked_until', {
+    type: Sequelize.DATE,
+    allowNull: true
+  });
+  await safeAddColumn('users', 'token_version', {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  });
 
-  // Add type to ads
+  // Ad columns
   await safeAddColumn('ads', 'type', {
     type: Sequelize.STRING,
     allowNull: false,
     defaultValue: 'service'
   });
-
-  // Add condition to ads
   await safeAddColumn('ads', 'condition', {
     type: Sequelize.STRING,
     allowNull: true
   });
-
-  // Add trade_possible to ads
   await safeAddColumn('ads', 'trade_possible', {
     type: Sequelize.BOOLEAN,
     allowNull: false,
     defaultValue: false
   });
-
-  // Add price_type to ads
   await safeAddColumn('ads', 'price_type', {
     type: Sequelize.STRING,
     allowNull: false,
     defaultValue: 'fixed'
   });
-
-  // Add images to ads
   await safeAddColumn('ads', 'images', {
     type: Sequelize.TEXT,
     allowNull: true

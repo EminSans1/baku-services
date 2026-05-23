@@ -1,17 +1,22 @@
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const helmet = require('helmet');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
+const { authenticator } = require('otplib');
 const { sequelize, User, Ad, syncDatabase } = require('./db');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 
+// ─────────────────────────────────────────────────────────────────────────────
 // Cloudinary SDK reads CLOUDINARY_URL on require — validate format first
+// ─────────────────────────────────────────────────────────────────────────────
 function parseCloudinaryEnv() {
   const raw = process.env.CLOUDINARY_URL;
   if (!raw) return null;
@@ -41,11 +46,17 @@ if (cloudinaryCredentials) {
   console.log(`[INFO] Cloudinary enabled (cloud: ${cloudinaryCredentials.cloud_name})`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Environment & secrets
+// ─────────────────────────────────────────────────────────────────────────────
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 
-/** Require env in production; allow dev fallbacks only for local SQLite. */
-function requireEnv(name, devFallback) {
+/**
+ * Require env in production. In development a fallback is allowed ONLY for
+ * non-secret values; security-critical secrets MUST be provided explicitly.
+ */
+function requireEnv(name, { devFallback, secret = false } = {}) {
   const value = process.env[name];
   if (value && String(value).trim()) {
     return String(value).trim();
@@ -54,30 +65,104 @@ function requireEnv(name, devFallback) {
     console.error(`[FATAL] Missing required environment variable: ${name}`);
     process.exit(1);
   }
+  if (secret) {
+    // Generate a random per-process value so dev still works but the secret
+    // is unique per restart and never matches anything an attacker could guess.
+    const generated = crypto.randomBytes(48).toString('hex');
+    console.warn(
+      `[WARN] ${name} not set — generated an EPHEMERAL random value for this dev process. ` +
+      'All sessions/tokens will be invalidated when the server restarts.'
+    );
+    return generated;
+  }
   if (devFallback !== undefined) {
-    console.warn(`[WARN] ${name} not set — using development fallback.`);
+    console.warn(`[WARN] ${name} not set — using non-secret development fallback.`);
     return devFallback;
   }
   console.error(`[FATAL] Missing environment variable: ${name}`);
   process.exit(1);
 }
 
-const JWT_SECRET = requireEnv('JWT_SECRET', 'dev-only-jwt-secret');
-const ADMIN_PASSWORD = requireEnv('ADMIN_PASSWORD', 'dev-only-admin-password');
-const ADMIN_TOKEN = requireEnv('ADMIN_TOKEN', 'dev-only-admin-token');
-const ADMIN_2FA_CODE = requireEnv('ADMIN_2FA_CODE', '000000');
+const JWT_SECRET = requireEnv('JWT_SECRET', { secret: true });
+const ADMIN_PASSWORD = requireEnv('ADMIN_PASSWORD', { secret: true });
+// TOTP base32 secret. Generate once with otplib.authenticator.generateSecret()
+// and store in env. If absent in development, an ephemeral one is generated
+// (and printed once below) so QR provisioning still works for local testing.
+const ADMIN_TOTP_SECRET = (() => {
+  const env = process.env.ADMIN_TOTP_SECRET && process.env.ADMIN_TOTP_SECRET.trim();
+  if (env) return env;
+  if (IS_PRODUCTION) {
+    console.error('[FATAL] Missing required environment variable: ADMIN_TOTP_SECRET');
+    process.exit(1);
+  }
+  const generated = authenticator.generateSecret();
+  console.warn(
+    `[WARN] ADMIN_TOTP_SECRET not set — generated dev secret: ${generated} ` +
+    '(scan into your authenticator app or set in env to persist).'
+  );
+  return generated;
+})();
+// Optional fallback: legacy static 2FA code, kept ONLY for dev/migration.
+// Never set this in production.
+const ADMIN_2FA_CODE_FALLBACK = process.env.ADMIN_2FA_CODE
+  ? String(process.env.ADMIN_2FA_CODE).trim()
+  : null;
+if (IS_PRODUCTION && ADMIN_2FA_CODE_FALLBACK) {
+  console.warn(
+    '[WARN] ADMIN_2FA_CODE is set in production. Static codes are insecure — ' +
+    'remove ADMIN_2FA_CODE and rely on ADMIN_TOTP_SECRET.'
+  );
+}
 
+// CSRF: a server-side secret used to derive double-submit cookie tokens.
+const CSRF_SECRET = requireEnv('CSRF_SECRET', { secret: true });
+
+// ─────────────────────────────────────────────────────────────────────────────
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
-// Local Upload Directory Creation
+// Cookie configuration
+const COOKIE_NAME_USER = 'bbs_session';
+const COOKIE_NAME_ADMIN = 'bbs_admin';
+const COOKIE_NAME_CSRF = 'bbs_csrf';
+const USER_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const ADMIN_TOKEN_TTL_SECONDS = 60 * 60;          // 1 hour
+
+const baseCookieOptions = {
+  httpOnly: true,
+  secure: IS_PRODUCTION,
+  sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+  path: '/'
+};
+
+function setUserSessionCookie(res, token) {
+  res.cookie(COOKIE_NAME_USER, token, {
+    ...baseCookieOptions,
+    maxAge: USER_TOKEN_TTL_SECONDS * 1000
+  });
+}
+function clearUserSessionCookie(res) {
+  res.clearCookie(COOKIE_NAME_USER, baseCookieOptions);
+}
+function setAdminSessionCookie(res, token) {
+  res.cookie(COOKIE_NAME_ADMIN, token, {
+    ...baseCookieOptions,
+    maxAge: ADMIN_TOKEN_TTL_SECONDS * 1000
+  });
+}
+function clearAdminSessionCookie(res) {
+  res.clearCookie(COOKIE_NAME_ADMIN, baseCookieOptions);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Local Upload Directory & Multer
+// ─────────────────────────────────────────────────────────────────────────────
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-// Multer Storage Configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOAD_DIR);
@@ -147,13 +232,13 @@ function sanitizeImageUrls(images) {
 
 const uploadAdImage = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB per file
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: uploadFilter
 });
 
 const uploadAvatar = multer({
   storage: storage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB per file
+  limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: uploadFilter
 });
 
@@ -184,7 +269,6 @@ const deleteFileOrCloudinary = async (url) => {
   if (url.includes('cloudinary.com')) {
     try {
       const parts = url.split('/');
-      const filename = parts[parts.length - 1];
       const publicIdWithExt = parts.slice(parts.indexOf('upload') + 2).join('/');
       const publicId = publicIdWithExt.substring(0, publicIdWithExt.lastIndexOf('.'));
       await cloudinary.uploader.destroy(publicId);
@@ -206,50 +290,71 @@ const deleteFileOrCloudinary = async (url) => {
   }
 };
 
-// Security HTTP Headers
+// ─────────────────────────────────────────────────────────────────────────────
+// Security middleware
+// ─────────────────────────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      // Allow only own scripts. CRA inlines a tiny bootstrap chunk in
+      // index.html; we hash-allow it via 'strict-dynamic' alternative if
+      // needed. For now we only permit 'self' which works once CRA is
+      // configured to emit external scripts (default in production build).
+      scriptSrc: ["'self'"],
+      // Tailwind/CRA rely on inline <style> for runtime theming. Limited to
+      // styles only (not scripts), which keeps the major XSS vector closed.
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
-    },
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"]
+    }
   },
+  crossOriginEmbedderPolicy: false,
+  hsts: IS_PRODUCTION
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
 }));
 
 // CORS Configuration - Restrict origins to frontend dev & prod & custom CLIENT_ORIGIN env
 const allowedOrigins = [
-  'http://localhost:3000', 
-  'http://localhost:5000', 
+  'http://localhost:3000',
+  'http://localhost:5000',
   'https://baku-services.onrender.com',
   process.env.CLIENT_ORIGIN
 ].filter(Boolean);
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Same-origin requests (e.g. server-rendered HTML, curl) have no Origin.
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+      // Silent reject keeps the client from getting a 500 with a stack trace.
+      return callback(null, false);
     }
     return callback(null, true);
   },
   credentials: true
 }));
 
+app.use(cookieParser());
+app.use(express.json({ limit: '200kb' }));
+
 // Global Rate Limiting (Prevent DDoS / abuse)
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 150,
   message: { error: 'Too many requests from this IP, please try again later.' }
 });
 app.use('/api/', globalLimiter);
 
-// Auth Rate Limiting for general users
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 20,
   message: { error: 'Too many login or registration attempts. Please try again after 15 minutes.' }
 });
@@ -262,9 +367,76 @@ const uploadLimiter = rateLimit({
 });
 app.use('/api/upload/', uploadLimiter);
 
-app.use(express.json({ limit: '200kb' }));
+// ─────────────────────────────────────────────────────────────────────────────
+// CSRF protection (double-submit cookie + Origin check)
+// ─────────────────────────────────────────────────────────────────────────────
+function generateCsrfToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+function setCsrfCookie(res, token) {
+  // Readable by JS — that's the whole point of double-submit.
+  res.cookie(COOKIE_NAME_CSRF, token, {
+    httpOnly: false,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+    path: '/',
+    maxAge: USER_TOKEN_TTL_SECONDS * 1000
+  });
+}
 
-// Validation wrapper middleware
+function ensureCsrfCookie(req, res, next) {
+  if (!req.cookies[COOKIE_NAME_CSRF]) {
+    setCsrfCookie(res, generateCsrfToken());
+  }
+  next();
+}
+app.use(ensureCsrfCookie);
+
+const STATE_CHANGING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// Origin allowlist for CSRF — same as CORS allowlist plus same-origin.
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // same-origin browser navigation
+  return allowedOrigins.indexOf(origin) !== -1;
+}
+
+function csrfProtect(req, res, next) {
+  if (!STATE_CHANGING_METHODS.has(req.method)) return next();
+  if (!req.path.startsWith('/api/')) return next();
+
+  // 1. Origin / Referer check — defence in depth.
+  const origin = req.headers.origin || (req.headers.referer && new URL(req.headers.referer).origin);
+  if (origin && !isAllowedOrigin(origin)) {
+    return res.status(403).json({ error: 'Origin не разрешён.' });
+  }
+
+  // 2. Double-submit cookie token. Skipped only for the very first auth call
+  //    on a brand-new client that hasn't seen the cookie yet — but the cookie
+  //    is set on every response (ensureCsrfCookie), so by the time the form
+  //    is submitted the client always has it.
+  const cookieToken = req.cookies[COOKIE_NAME_CSRF];
+  const headerToken = req.headers['x-csrf-token'];
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    return res.status(403).json({ error: 'Недействительный CSRF-токен.' });
+  }
+
+  next();
+}
+app.use(csrfProtect);
+
+// Endpoint for the SPA to fetch the current CSRF token explicitly
+app.get('/api/csrf-token', (req, res) => {
+  let token = req.cookies[COOKIE_NAME_CSRF];
+  if (!token) {
+    token = generateCsrfToken();
+    setCsrfCookie(res, token);
+  }
+  res.json({ csrfToken: token });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation helpers
+// ─────────────────────────────────────────────────────────────────────────────
 const validate = (validations) => {
   return async (req, res, next) => {
     await Promise.all(validations.map(validation => validation.run(req)));
@@ -276,13 +448,11 @@ const validate = (validations) => {
   };
 };
 
-// Validation schemas
 const registerValidation = [
   body('fullname')
     .trim()
     .notEmpty().withMessage('Имя пользователя обязательно')
-    .isLength({ min: 2, max: 50 }).withMessage('Имя должно содержать от 2 до 50 символов')
-    .escape(),
+    .isLength({ min: 2, max: 50 }).withMessage('Имя должно содержать от 2 до 50 символов'),
   body('email')
     .trim()
     .notEmpty().withMessage('Email обязателен')
@@ -291,8 +461,7 @@ const registerValidation = [
   body('phone')
     .optional({ checkFalsy: true })
     .trim()
-    .isLength({ max: 25 }).withMessage('Номер телефона слишком длинный')
-    .escape(),
+    .isLength({ max: 25 }).withMessage('Номер телефона слишком длинный'),
   body('password')
     .notEmpty().withMessage('Пароль обязателен')
     .isLength({ min: IS_PRODUCTION ? 8 : 6 }).withMessage(
@@ -316,13 +485,11 @@ const adValidation = [
   body('title')
     .trim()
     .notEmpty().withMessage('Заголовок обязателен')
-    .isLength({ min: 3, max: 100 }).withMessage('Заголовок должен содержать от 3 до 100 символов')
-    .escape(),
+    .isLength({ min: 3, max: 100 }).withMessage('Заголовок должен содержать от 3 до 100 символов'),
   body('category')
     .trim()
     .notEmpty().withMessage('Категория обязательна')
-    .isLength({ max: 50 }).withMessage('Недопустимая категория')
-    .escape(),
+    .isLength({ max: 50 }).withMessage('Недопустимая категория'),
   body('price')
     .trim()
     .notEmpty().withMessage('Цена обязательна')
@@ -331,13 +498,11 @@ const adValidation = [
   body('description')
     .trim()
     .notEmpty().withMessage('Описание обязательно')
-    .isLength({ min: 10, max: 1000 }).withMessage('Описание должно содержать от 10 до 1000 символов')
-    .escape(),
+    .isLength({ min: 10, max: 1000 }).withMessage('Описание должно содержать от 10 до 1000 символов'),
   body('type')
     .trim()
     .default('service')
-    .isIn(['service', 'product']).withMessage('Недопустимый тип объявления')
-    .escape(),
+    .isIn(['service', 'product']).withMessage('Недопустимый тип объявления'),
   body('condition')
     .custom((value, { req }) => {
       if (req.body.type === 'product') {
@@ -346,8 +511,7 @@ const adValidation = [
         }
       }
       return true;
-    })
-    .escape(),
+    }),
   body('price_type')
     .custom((value, { req }) => {
       if (req.body.type === 'product') {
@@ -356,8 +520,7 @@ const adValidation = [
         }
       }
       return true;
-    })
-    .escape(),
+    }),
   body('trade_possible')
     .optional()
     .customSanitizer(val => val === 'true' || val === true),
@@ -371,43 +534,127 @@ const adValidation = [
 
 let boardActive = true;
 
-// Middleware for Admin validation
-const checkAdminAuth = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader === `Bearer ${ADMIN_TOKEN}`) {
-    next();
-  } else {
-    res.status(403).json({ error: 'Доступ запрещен. Требуется авторизация администратора.' });
-  }
-};
 
-// Middleware for User validation (supports Admin token bypass)
-const checkUserAuth = (req, res, next) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth middleware (cookie-based JWT)
+// ─────────────────────────────────────────────────────────────────────────────
+function readJwtFromRequest(req, cookieName) {
+  const cookieToken = req.cookies && req.cookies[cookieName];
+  if (cookieToken) return cookieToken;
+
+  // Backward-compat fallback: still accept Authorization: Bearer <token>
+  // for non-browser clients (e.g. Postman). Browsers always use cookies.
   const authHeader = req.headers['authorization'];
-  if (!authHeader) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+  return null;
+}
+
+function checkAdminAuth(req, res, next) {
+  const token = readJwtFromRequest(req, COOKIE_NAME_ADMIN);
+  if (!token) {
+    return res.status(403).json({ error: 'Доступ запрещён. Требуется авторизация администратора.' });
+  }
+  jwt.verify(token, JWT_SECRET, { audience: 'admin' }, (err, decoded) => {
+    if (err || !decoded || decoded.role !== 'admin') {
+      return res.status(403).json({ error: 'Доступ запрещён. Требуется авторизация администратора.' });
+    }
+    req.admin = decoded;
+    req.isAdmin = true;
+    next();
+  });
+}
+
+async function checkUserAuth(req, res, next) {
+  // Admin token grants user-level access too.
+  const adminToken = readJwtFromRequest(req, COOKIE_NAME_ADMIN);
+  if (adminToken) {
+    try {
+      const decoded = jwt.verify(adminToken, JWT_SECRET, { audience: 'admin' });
+      if (decoded && decoded.role === 'admin') {
+        req.admin = decoded;
+        req.isAdmin = true;
+        return next();
+      }
+    } catch (_) { /* fall through to user auth */ }
+  }
+
+  const userToken = readJwtFromRequest(req, COOKIE_NAME_USER);
+  if (!userToken) {
     return res.status(401).json({ error: 'Авторизация обязательна. Пожалуйста, войдите в аккаунт.' });
   }
 
-  const token = authHeader.split(' ')[1];
-
-  // Admin token bypass
-  if (authHeader === `Bearer ${ADMIN_TOKEN}`) {
-    req.isAdmin = true;
-    return next();
+  let decoded;
+  try {
+    decoded = jwt.verify(userToken, JWT_SECRET, { audience: 'user' });
+  } catch (_) {
+    clearUserSessionCookie(res);
+    return res.status(401).json({ error: 'Неверный или просроченный токен авторизации.' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ error: 'Неверный или просроченный токен авторизации.' });
+  // Verify token version against the DB so logout/password-change can revoke
+  // every existing JWT for the account.
+  try {
+    const user = await User.findByPk(decoded.id, {
+      attributes: ['id', 'fullname', 'email', 'phone', 'avatar_url', 'token_version']
+    });
+    if (!user || user.token_version !== decoded.tv) {
+      clearUserSessionCookie(res);
+      return res.status(401).json({ error: 'Сессия завершена. Войдите снова.' });
     }
-    req.user = decoded;
+    req.user = {
+      id: user.id,
+      fullname: user.fullname,
+      email: user.email,
+      phone: user.phone,
+      avatar_url: user.avatar_url || null
+    };
     next();
-  });
-};
+  } catch (err) {
+    console.error('Auth lookup error:', err);
+    res.status(500).json({ error: 'Ошибка авторизации.' });
+  }
+}
 
-// --- AUTHENTICATION ROUTES ---
+function buildUserPayload(user) {
+  return {
+    id: user.id,
+    fullname: user.fullname,
+    email: user.email,
+    phone: user.phone || null,
+    avatar_url: user.avatar_url || null
+  };
+}
 
-// User Registration (Sequelize version)
+function signUserToken(user) {
+  return jwt.sign(
+    {
+      id: user.id,
+      tv: user.token_version
+    },
+    JWT_SECRET,
+    {
+      audience: 'user',
+      expiresIn: USER_TOKEN_TTL_SECONDS
+    }
+  );
+}
+
+function signAdminToken() {
+  return jwt.sign(
+    { role: 'admin' },
+    JWT_SECRET,
+    {
+      audience: 'admin',
+      expiresIn: ADMIN_TOKEN_TTL_SECONDS
+    }
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTHENTICATION ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/auth/register', validate(registerValidation), async (req, res) => {
   const { fullname, email, phone, password } = req.body;
 
@@ -417,7 +664,7 @@ app.post('/api/auth/register', validate(registerValidation), async (req, res) =>
       return res.status(400).json({ error: 'Пользователь с таким email уже зарегистрирован.' });
     }
 
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    const hashedPassword = await bcrypt.hash(password, IS_PRODUCTION ? 12 : 10);
     const newUser = await User.create({
       fullname,
       email,
@@ -425,102 +672,188 @@ app.post('/api/auth/register', validate(registerValidation), async (req, res) =>
       password: hashedPassword
     });
 
-    const userPayload = { id: newUser.id, fullname, email, phone, avatar_url: newUser.avatar_url || null };
-    const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
-
-    res.json({ success: true, token, user: userPayload });
+    const token = signUserToken(newUser);
+    setUserSessionCookie(res, token);
+    res.json({ success: true, user: buildUserPayload(newUser) });
   } catch (err) {
     console.error('Registration error:', err);
     res.status(500).json({ error: 'Ошибка при сохранении пользователя.' });
   }
 });
 
-// User Login (Sequelize version)
+const LOGIN_LOCK_THRESHOLD = 6;
+const LOGIN_LOCK_MINUTES = 15;
+
 app.post('/api/auth/login', validate(loginValidation), async (req, res) => {
   const { email, password } = req.body;
 
   try {
     const user = await User.findOne({ where: { email } });
-    if (!user) {
+    // Always run a bcrypt comparison to avoid leaking which emails exist via
+    // response timing.
+    const dummyHash = '$2b$10$CwTycUXWue0Thq9StjUM0uJ8Nlz6Jx7kQbb6/LFwG/zZ/h0a6cT8e';
+    const passwordHash = user ? user.password : dummyHash;
+    const valid = await bcrypt.compare(password, passwordHash);
+
+    if (user && user.locked_until && new Date(user.locked_until) > new Date()) {
+      return res.status(429).json({ error: 'Аккаунт временно заблокирован из-за множества неудачных попыток. Попробуйте позже.' });
+    }
+
+    if (!user || !valid) {
+      if (user) {
+        const failed = (user.failed_login_count || 0) + 1;
+        const updates = { failed_login_count: failed };
+        if (failed >= LOGIN_LOCK_THRESHOLD) {
+          updates.locked_until = new Date(Date.now() + LOGIN_LOCK_MINUTES * 60 * 1000);
+          updates.failed_login_count = 0;
+        }
+        await user.update(updates);
+      }
       return res.status(400).json({ error: 'Неверный email или пароль.' });
     }
 
-    const isPasswordCorrect = bcrypt.compareSync(password, user.password);
-    if (!isPasswordCorrect) {
-      return res.status(400).json({ error: 'Неверный email или пароль.' });
+    if (user.failed_login_count > 0 || user.locked_until) {
+      await user.update({ failed_login_count: 0, locked_until: null });
     }
 
-    const userPayload = {
-      id: user.id,
-      fullname: user.fullname,
-      email: user.email,
-      phone: user.phone,
-      avatar_url: user.avatar_url || null
-    };
-    const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
-
-    res.json({ success: true, token, user: userPayload });
+    const token = signUserToken(user);
+    setUserSessionCookie(res, token);
+    res.json({ success: true, user: buildUserPayload(user) });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Ошибка базы данных.' });
   }
 });
 
-// --- ADMIN SECURITY & AUTHENTICATION ENHANCEMENTS ---
+app.post('/api/auth/logout', (req, res) => {
+  clearUserSessionCookie(res);
+  clearAdminSessionCookie(res);
+  res.json({ success: true });
+});
 
-// Separate rate limiters for Step 1 (verify-password) and Step 2 (login)
-// This ensures that hitting one endpoint doesn't exhaust the rate limit bucket of the other.
+// Returns the current user (if any) — useful on SPA boot to restore state.
+app.get('/api/auth/me', async (req, res) => {
+  const userToken = readJwtFromRequest(req, COOKIE_NAME_USER);
+  if (!userToken) return res.json({ user: null });
+  try {
+    const decoded = jwt.verify(userToken, JWT_SECRET, { audience: 'user' });
+    const user = await User.findByPk(decoded.id, {
+      attributes: ['id', 'fullname', 'email', 'phone', 'avatar_url', 'token_version']
+    });
+    if (!user || user.token_version !== decoded.tv) {
+      clearUserSessionCookie(res);
+      return res.json({ user: null });
+    }
+    res.json({ user: buildUserPayload(user) });
+  } catch (_) {
+    clearUserSessionCookie(res);
+    res.json({ user: null });
+  }
+});
+
+app.get('/api/admin/me', (req, res) => {
+  const adminToken = readJwtFromRequest(req, COOKIE_NAME_ADMIN);
+  if (!adminToken) return res.json({ admin: false });
+  try {
+    const decoded = jwt.verify(adminToken, JWT_SECRET, { audience: 'admin' });
+    res.json({ admin: decoded.role === 'admin' });
+  } catch (_) {
+    clearAdminSessionCookie(res);
+    res.json({ admin: false });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN AUTHENTICATION (TOTP)
+// ─────────────────────────────────────────────────────────────────────────────
 const adminVerifyLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 3,
+  max: 5,
   message: { error: 'Превышено число попыток входа. Пожалуйста, попробуйте через час.' },
   statusCode: 429
 });
 
 const adminLoginLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 3,
+  max: 5,
   message: { error: 'Превышено число попыток входа. Пожалуйста, попробуйте через час.' },
   statusCode: 429
 });
 
-// Delayed Generic Mismatch Response Helper
+function constantTimeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    // Still do a comparison to keep timing similar.
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length));
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function verifyAdmin2FA(code) {
+  if (!code || typeof code !== 'string') return false;
+  const trimmed = code.trim();
+  if (!trimmed) return false;
+
+  // Primary: TOTP via otplib (RFC 6238).
+  try {
+    if (authenticator.check(trimmed, ADMIN_TOTP_SECRET)) return true;
+  } catch (_) { /* ignore */ }
+
+  // Backward-compat fallback: static code, if explicitly configured.
+  if (ADMIN_2FA_CODE_FALLBACK && constantTimeEqual(trimmed, ADMIN_2FA_CODE_FALLBACK)) {
+    return true;
+  }
+  return false;
+}
+
 const sendFailedAdminResponse = (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
   console.warn(`[WARN] Failed admin login attempt from IP ${ip} at ${new Date().toISOString()}`);
-  
-  // Random delay between 1.0 and 2.0 seconds
   const delay = Math.floor(Math.random() * 1000) + 1000;
   setTimeout(() => {
     res.status(401).json({ error: 'Неверные учётные данные' });
   }, delay);
 };
 
-// Admin Login Step 1: Verify Password
+// Step 1: verify password
 app.post('/api/admin/verify-password', adminVerifyLimiter, (req, res) => {
-  const { password } = req.body;
-  if (password && password.trim() === ADMIN_PASSWORD.trim()) {
-    res.json({ success: true, message: 'Password verified. Proceed to 2FA.' });
-  } else {
-    sendFailedAdminResponse(req, res);
+  const password = req.body && typeof req.body.password === 'string' ? req.body.password : '';
+  if (password && constantTimeEqual(password.trim(), ADMIN_PASSWORD.trim())) {
+    return res.json({ success: true, message: 'Password verified. Proceed to 2FA.' });
   }
+  sendFailedAdminResponse(req, res);
 });
 
-// Admin Login Step 2: Verify Password again + 2FA Code
+// Step 2: verify password + TOTP code
 app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
-  const { password, code } = req.body;
+  const password = req.body && typeof req.body.password === 'string' ? req.body.password : '';
+  const code = req.body && typeof req.body.code === 'string' ? req.body.code : '';
 
-  if (password && code && password.trim() === ADMIN_PASSWORD.trim() && code.trim() === ADMIN_2FA_CODE.trim()) {
+  if (
+    password &&
+    code &&
+    constantTimeEqual(password.trim(), ADMIN_PASSWORD.trim()) &&
+    verifyAdmin2FA(code)
+  ) {
     const ip = req.ip || req.connection.remoteAddress;
     console.log(`[INFO] Successful admin login from IP ${ip} at ${new Date().toISOString()}`);
-    res.json({ success: true, token: ADMIN_TOKEN });
-  } else {
-    sendFailedAdminResponse(req, res);
+    const token = signAdminToken();
+    setAdminSessionCookie(res, token);
+    return res.json({ success: true });
   }
+  sendFailedAdminResponse(req, res);
 });
 
-// --- BOARD STATUS & API ROUTES ---
+app.post('/api/admin/logout', (req, res) => {
+  clearAdminSessionCookie(res);
+  res.json({ success: true });
+});
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BOARD STATUS & ADS
+// ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/board-status', (req, res) => {
   res.json({ active: boardActive });
 });
@@ -535,7 +868,7 @@ app.post('/api/admin/toggle-board', checkAdminAuth, (req, res) => {
   }
 });
 
-// GET all ads (Sequelize version) with type filter
+// GET all ads — does NOT include user PII.
 app.get('/api/ads', async (req, res) => {
   const { type } = req.query;
   const whereClause = {};
@@ -555,16 +888,16 @@ app.get('/api/ads', async (req, res) => {
   }
 });
 
-// Posting ads is protected by user authorization with schema validation (Sequelize version)
 app.post('/api/ads', checkUserAuth, validate(adValidation), async (req, res) => {
   if (!boardActive && !req.isAdmin) {
     return res.status(403).json({ error: 'Публикация объявлений временно отключена администратором.' });
   }
 
   const { title, category, price, description, type, condition, trade_possible, price_type, images } = req.body;
-  
-  // Use fullname from verified token, or allow admin override, or fallback to body name
-  const name = req.isAdmin ? (req.body.name || 'Admin') : (req.user?.fullname || req.body.name || 'User');
+
+  const name = req.isAdmin
+    ? (req.body.name || 'Admin')
+    : (req.user?.fullname || req.body.name || 'User');
   const userId = req.isAdmin ? null : (req.user?.id || null);
 
   let imagesStr = null;
@@ -596,7 +929,6 @@ app.post('/api/ads', checkUserAuth, validate(adValidation), async (req, res) => 
   }
 });
 
-// GET listings created by the logged-in user (Sequelize version) with optional type filter
 app.get('/api/listings/my', checkUserAuth, async (req, res) => {
   const userId = req.user ? req.user.id : null;
   const { type } = req.query;
@@ -617,7 +949,6 @@ app.get('/api/listings/my', checkUserAuth, async (req, res) => {
   }
 });
 
-// Consolidate delete checks for both api/listings/:id and api/ads/:id (Sequelize version) with file cleanup
 const handleAdDeletion = async (req, res) => {
   const id = req.params.id;
   try {
@@ -627,7 +958,6 @@ const handleAdDeletion = async (req, res) => {
     }
 
     if (req.isAdmin || (req.user && ad.user_id === req.user.id)) {
-      // Clean up associated images
       if (ad.images) {
         try {
           const images = JSON.parse(ad.images);
@@ -655,7 +985,7 @@ const handleAdDeletion = async (req, res) => {
 app.delete('/api/listings/:id', checkUserAuth, handleAdDeletion);
 app.delete('/api/ads/:id', checkUserAuth, handleAdDeletion);
 
-// GET listing details by ID (Sequelize version with LEFT JOIN)
+// PUBLIC listing detail — does NOT expose contact info.
 app.get('/api/listings/:id', async (req, res) => {
   const id = req.params.id;
   try {
@@ -663,7 +993,7 @@ app.get('/api/listings/:id', async (req, res) => {
       include: [{
         model: User,
         as: 'user',
-        attributes: ['fullname', 'email', 'phone', 'avatar_url']
+        attributes: ['fullname', 'avatar_url']
       }]
     });
 
@@ -688,14 +1018,13 @@ app.get('/api/listings/:id', async (req, res) => {
       price: ad.price,
       description: ad.description,
       created_at: ad.created_at,
-      email: ad.user?.email || '',
-      phone: ad.user?.phone || '',
       avatar_url: ad.user?.avatar_url || null,
       type: ad.type,
       condition: ad.condition,
       trade_possible: ad.trade_possible,
       price_type: ad.price_type,
-      images: parsedImages
+      images: parsedImages,
+      has_user: !!ad.user_id
     });
   } catch (err) {
     console.error('Error fetching listing detail:', err);
@@ -703,7 +1032,35 @@ app.get('/api/listings/:id', async (req, res) => {
   }
 });
 
-// Securely update an ad (allows admin and the listing author only) (Sequelize version)
+// AUTHENTICATED contact info — separate endpoint with its own rate limit.
+const contactsLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  message: { error: 'Слишком много запросов контактных данных. Попробуйте позже.' }
+});
+app.get('/api/listings/:id/contacts', contactsLimiter, checkUserAuth, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const ad = await Ad.findByPk(id, {
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: ['email', 'phone']
+      }]
+    });
+    if (!ad) {
+      return res.status(404).json({ error: 'Объявление не найдено' });
+    }
+    res.json({
+      email: ad.user?.email || '',
+      phone: ad.user?.phone || ''
+    });
+  } catch (err) {
+    console.error('Error fetching contacts:', err);
+    res.status(500).json({ error: 'Ошибка получения контактов' });
+  }
+});
+
 app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) => {
   const id = req.params.id;
   const { title, category, price, description, type, condition, trade_possible, price_type, images } = req.body;
@@ -714,7 +1071,7 @@ app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) 
 
     if (req.isAdmin || (req.user && ad.user_id === req.user.id)) {
       const name = req.isAdmin ? (req.body.name || ad.name) : ad.name;
-      
+
       let safeImages = null;
       try {
         safeImages = images != null ? sanitizeImageUrls(images) : null;
@@ -723,7 +1080,6 @@ app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) 
       }
       const imagesStr = safeImages ? JSON.stringify(safeImages) : ad.images;
 
-      // Handle old images deletion if we are updating images!
       if (safeImages && ad.images) {
         try {
           const oldImages = JSON.parse(ad.images);
@@ -759,9 +1115,9 @@ app.put('/api/ads/:id', checkUserAuth, validate(adValidation), async (req, res) 
   }
 });
 
-// --- IMAGE UPLOAD API ENDPOINTS ---
-
-// Upload Avatar (Authorized, max 2MB)
+// ─────────────────────────────────────────────────────────────────────────────
+// IMAGE UPLOAD ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/upload/avatar', checkUserAuth, (req, res) => {
   uploadAvatar.single('avatar')(req, res, async (err) => {
     if (err) {
@@ -776,17 +1132,13 @@ app.post('/api/upload/avatar', checkUserAuth, (req, res) => {
 
     try {
       const url = await uploadToCloudinaryOrLocal(req.file);
-      
-      // Update User in database
       const user = await User.findByPk(req.user.id);
       if (user) {
-        // Delete old avatar if present
         if (user.avatar_url) {
           await deleteFileOrCloudinary(user.avatar_url);
         }
         await user.update({ avatar_url: url });
       }
-
       res.json({ success: true, url });
     } catch (dbErr) {
       console.error('Error updating user avatar:', dbErr);
@@ -795,7 +1147,6 @@ app.post('/api/upload/avatar', checkUserAuth, (req, res) => {
   });
 });
 
-// Upload Ad Photos (Authorized, max 5 images, each max 5MB)
 app.post('/api/upload/ad-image', checkUserAuth, (req, res) => {
   uploadAdImage.array('images', 5)(req, res, async (err) => {
     if (err) {
@@ -819,7 +1170,6 @@ app.post('/api/upload/ad-image', checkUserAuth, (req, res) => {
   });
 });
 
-// Serve local upload files (path traversal safe)
 app.get('/api/uploads/:filename', (req, res) => {
   const filePath = resolveUploadFilePath(req.params.filename);
   if (!filePath || !fs.existsSync(filePath)) {
@@ -828,8 +1178,9 @@ app.get('/api/uploads/:filename', (req, res) => {
   res.sendFile(filePath);
 });
 
-// --- ADMIN STATS ENDPOINT ---
-
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN STATS
+// ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/admin/stats', checkAdminAuth, async (req, res) => {
   try {
     const servicesCount = await Ad.count({ where: { type: 'service' } });
@@ -844,7 +1195,6 @@ app.get('/api/admin/stats', checkAdminAuth, async (req, res) => {
   }
 });
 
-// Health check endpoint for Render
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
@@ -852,13 +1202,12 @@ app.get('/api/health', (req, res) => {
 // Serve frontend build static files only in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'client/build')));
-  
-  app.get('/{*splat}', (req, res) => {
+
+  app.get(/^\/(?!api\/).*/, (req, res) => {
     res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
   });
 }
 
-// Sync Database (with safe migrations) and Start Server
 syncDatabase()
   .then(() => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
