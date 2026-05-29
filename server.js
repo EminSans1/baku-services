@@ -1254,6 +1254,11 @@ function absoluteImageUrl(url) {
   return `${PUBLIC_BASE_URL}/${url}`;
 }
 
+// Google Search Console HTML Verification
+app.get('/googlef1d9eb9aaf4880a4.html', (req, res) => {
+  res.send('google-site-verification: googlef1d9eb9aaf4880a4.html');
+});
+
 // Dynamic sitemap so Google can discover every listing.
 app.get('/sitemap.xml', async (req, res) => {
   try {
