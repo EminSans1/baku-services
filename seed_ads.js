@@ -15,7 +15,7 @@ async function run() {
     
     // Developer user
     const [userDev] = await User.findOrCreate({
-      where: { email: 'ruslan.aliyev@example.com' },
+      where: { email: 'ruslan.aliyev.dev@gmail.com' },
       defaults: {
         fullname: 'Руслан Алиев',
         phone: '+994507654321',
@@ -26,7 +26,7 @@ async function run() {
 
     // Interior designer user
     const [userDesign] = await User.findOrCreate({
-      where: { email: 'aysel.mammadova@example.com' },
+      where: { email: 'aysel.mammadova.design@gmail.com' },
       defaults: {
         fullname: 'Айсель Мамедова',
         phone: '+994553219876',
@@ -37,7 +37,7 @@ async function run() {
 
     // Tech seller user
     const [userTech] = await User.findOrCreate({
-      where: { email: 'ilgar.hasanov@example.com' },
+      where: { email: 'ilgar.hasanov.tech@mail.ru' },
       defaults: {
         fullname: 'Ильгар Гасанов',
         phone: '+994709876543',
@@ -48,7 +48,7 @@ async function run() {
 
     // Auto seller user
     const [userAuto] = await User.findOrCreate({
-      where: { email: 'dmitry.petrov@example.com' },
+      where: { email: 'dmitry.petrov.auto@yandex.ru' },
       defaults: {
         fullname: 'Дмитрий Петров',
         phone: '+994501234567',
