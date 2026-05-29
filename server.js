@@ -1259,6 +1259,124 @@ app.get('/googlef1d9eb9aaf4880a4.html', (req, res) => {
   res.send('google-site-verification: googlef1d9eb9aaf4880a4.html');
 });
 
+// Temporary database seeding route for Render Free Tier
+app.get('/api/seed-database-secret-7711', async (req, res) => {
+  try {
+    const { Ad, User } = require('./db');
+    
+    // Delete all existing ads
+    await Ad.destroy({ where: {} });
+
+    // Create or find mock users to author the listings
+    const [userDev] = await User.findOrCreate({
+      where: { email: 'ruslan.aliyev@example.com' },
+      defaults: {
+        fullname: 'Руслан Алиев',
+        phone: '+994507654321',
+        password: 'mockpassword123',
+        avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
+      }
+    });
+
+    const [userDesign] = await User.findOrCreate({
+      where: { email: 'aysel.mammadova@example.com' },
+      defaults: {
+        fullname: 'Айсель Мамедова',
+        phone: '+994553219876',
+        password: 'mockpassword123',
+        avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80'
+      }
+    });
+
+    const [userTech] = await User.findOrCreate({
+      where: { email: 'ilgar.hasanov@example.com' },
+      defaults: {
+        fullname: 'Ильгар Гасанов',
+        phone: '+994709876543',
+        password: 'mockpassword123',
+        avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
+      }
+    });
+
+    const [userAuto] = await User.findOrCreate({
+      where: { email: 'dmitry.petrov@example.com' },
+      defaults: {
+        fullname: 'Дмитрий Петров',
+        phone: '+994501234567',
+        password: 'mockpassword123',
+        avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
+      }
+    });
+
+    const mockAds = [
+      {
+        name: userDev.fullname,
+        title: 'Разработка современных веб-сайтов и веб-приложений под ключ',
+        category: 'IT и фриланс',
+        price: '1200',
+        description: 'Профессиональная разработка веб-сайтов на React, Next.js, Node.js. Создаю быстрые, адаптивные и оптимизированные для SEO решения. В стоимость входит: проектирование интерфейса, адаптивная верстка, интеграция платежных систем, базовая SEO-оптимизация и перенос на ваш хостинг. Опыт работы более 6 лет. Гарантия качества и соблюдение согласованных сроков!',
+        user_id: userDev.id,
+        type: 'service',
+        condition: null,
+        trade_possible: false,
+        price_type: 'fixed',
+        images: JSON.stringify(['https://images.unsplash.com/photo-1547658719-da2b51169166?auto=format&fit=crop&w=800&q=80']),
+        views: 142
+      },
+      {
+        name: userDesign.fullname,
+        title: 'Дизайн интерьера квартир и коммерческих помещений',
+        category: 'Ремонт и строительство',
+        price: '30',
+        description: 'Создаю уникальные и функциональные дизайн-проекты в современных стилях (минимализм, скандинавский, лофт, неоклассика). Разработка полного пакета чертежей для строителей, фотореалистичная 3D-визуализация каждого помещения, детальный подбор отделочных материалов, мебели и освещения. Авторский надзор на всех этапах реализации. Индивидуальный подход к вашему бюджету! Цена указана за кв. м.',
+        user_id: userDesign.id,
+        type: 'service',
+        condition: null,
+        trade_possible: false,
+        price_type: 'negotiable',
+        images: JSON.stringify(['https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=800&q=80']),
+        views: 98
+      },
+      {
+        name: userTech.fullname,
+        title: 'MacBook Pro 16" M3 Max / 36GB / 1TB Space Black',
+        category: 'Электроника',
+        price: '4800',
+        description: 'В идеальном косметическом и техническом состоянии (как новый). Полный оригинальный комплект (коробка, зарядное устройство MagSafe 3 мощностью 140W, кабель в оплетке). Батарея 98% емкости, всего 45 циклов перезарядки. Без царапин, сколов и потертостей, экран под защитной пленкой с первого дня. Использовался исключительно дома для работы с графикой. Любые проверки приветствуются!',
+        user_id: userTech.id,
+        type: 'product',
+        condition: 'new',
+        trade_possible: false,
+        price_type: 'fixed',
+        images: JSON.stringify(['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80']),
+        views: 215
+      },
+      {
+        name: userAuto.fullname,
+        title: 'Оригинальные диски Vossen HF-3 R20 с летней резиной',
+        category: 'Авто и запчасти',
+        price: '2600',
+        description: 'Продаю комплект оригинальных литых дисков Vossen HF-3 (разболтовка 5x112, разноширокие). Состояние идеальное, без бордюрной болезни, трещин и каких-либо сварок. Профессионально окрашены в фирменный цвет Gloss Black. Обуты в летнюю премиальную резину Michelin Pilot Sport 4S с отличным остатком протектора (около 6.5 мм). Стояли на Mercedes E-Class. Возможен разумный торг или обмен на диски R19 с вашей доплатой.',
+        user_id: userAuto.id,
+        type: 'product',
+        condition: 'used',
+        trade_possible: true,
+        price_type: 'fixed',
+        images: JSON.stringify(['https://images.unsplash.com/photo-1611245644788-b21087e5b6eb?auto=format&fit=crop&w=800&q=80']),
+        views: 74
+      }
+    ];
+
+    for (const adData of mockAds) {
+      await Ad.create(adData);
+    }
+
+    res.send('<h1>База данных успешно очищена и наполнена премиум объявлениями на Render!</h1>');
+  } catch (err) {
+    res.status(500).send(`<h1>Ошибка при наполнении базы: ${err.message}</h1>`);
+  }
+});
+
 // Dynamic sitemap so Google can discover every listing.
 app.get('/sitemap.xml', async (req, res) => {
   try {
