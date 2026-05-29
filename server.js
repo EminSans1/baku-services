@@ -1275,7 +1275,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
       where: { email: 'ruslan.aliyev.dev@gmail.com' },
       defaults: {
         fullname: 'Руслан Алиев',
-        phone: '+994502831947',
+        phone: '+9945028319470',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
       }
@@ -1285,7 +1285,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
       where: { email: 'aysel.mammadova.design@gmail.com' },
       defaults: {
         fullname: 'Айсель Мамедова',
-        phone: '+994557194028',
+        phone: '+9945571940283',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80'
       }
@@ -1295,7 +1295,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
       where: { email: 'ilgar.hasanov.tech@mail.ru' },
       defaults: {
         fullname: 'Ильгар Гасанов',
-        phone: '+994703625184',
+        phone: '+9947036251842',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
       }
@@ -1305,7 +1305,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
       where: { email: 'dmitry.petrov.auto@yandex.ru' },
       defaults: {
         fullname: 'Дмитрий Петров',
-        phone: '+994512467305',
+        phone: '+9945124673051',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
       }
