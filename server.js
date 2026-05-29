@@ -1323,7 +1323,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         condition: null,
         trade_possible: false,
         price_type: 'fixed',
-        images: JSON.stringify(['https://images.unsplash.com/photo-1547658719-da2b51169166?auto=format&fit=crop&w=800&q=80']),
+        images: JSON.stringify(['https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&w=800&q=80']),
         views: 142
       },
       {
@@ -1337,7 +1337,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         condition: null,
         trade_possible: false,
         price_type: 'negotiable',
-        images: JSON.stringify(['https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=800&q=80']),
+        images: JSON.stringify(['https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=800&q=80']),
         views: 98
       },
       {
@@ -1365,7 +1365,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         condition: 'used',
         trade_possible: true,
         price_type: 'fixed',
-        images: JSON.stringify(['https://images.unsplash.com/photo-1611245644788-b21087e5b6eb?auto=format&fit=crop&w=800&q=80']),
+        images: JSON.stringify(['https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?auto=format&fit=crop&w=800&q=80']),
         views: 74
       }
     ];
