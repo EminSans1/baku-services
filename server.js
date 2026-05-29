@@ -1277,7 +1277,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         fullname: 'Руслан Алиев',
         phone: '+9945028319470',
         password: 'mockpassword123',
-        avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
+        avatar_url: null
       }
     });
 
@@ -1287,7 +1287,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         fullname: 'Айсель Мамедова',
         phone: '+9945571940283',
         password: 'mockpassword123',
-        avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80'
+        avatar_url: null
       }
     });
 
@@ -1297,7 +1297,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         fullname: 'Ильгар Гасанов',
         phone: '+9947036251842',
         password: 'mockpassword123',
-        avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
+        avatar_url: null
       }
     });
 
@@ -1307,7 +1307,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         fullname: 'Дмитрий Петров',
         phone: '+9945124673051',
         password: 'mockpassword123',
-        avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
+        avatar_url: null
       }
     });
 
@@ -1365,7 +1365,7 @@ app.get('/api/seed-database-secret-7711', async (req, res) => {
         condition: 'used',
         trade_possible: true,
         price_type: 'fixed',
-        images: JSON.stringify(['https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?auto=format&fit=crop&w=800&q=80']),
+        images: JSON.stringify(['https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=800&q=80']),
         views: 74
       }
     ];
