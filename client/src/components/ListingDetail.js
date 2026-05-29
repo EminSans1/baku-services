@@ -28,6 +28,17 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
     fetchListing();
   }, [id, t]);
 
+  // Update the document title for users (crawlers get server-injected meta).
+  useEffect(() => {
+    if (listing) {
+      const priceLabel = listing.price_type === 'negotiable'
+        ? (lang === 'ru' ? 'Договорная' : lang === 'en' ? 'Negotiable' : 'Razılaşma')
+        : `${listing.price} AZN`;
+      document.title = `${listing.title} — ${priceLabel} | Baku Services`;
+    }
+    return () => { document.title = 'Baku Services'; };
+  }, [listing, lang]);
+
   const requestContacts = async () => {
     if (!user) {
       const msg = lang === 'ru'
@@ -121,6 +132,35 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
     navigator.clipboard.writeText(text);
     const label = typeKey === 'email' ? 'Email' : t('phoneLabel') || 'Phone';
     showToast(`${label} copied!`, 'success');
+  };
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    const shareTitle = listing ? `${listing.title} — ${listing.price} AZN` : 'Baku Services';
+    const shareData = {
+      title: shareTitle,
+      text: shareTitle,
+      url
+    };
+    // Native share sheet on mobile; clipboard fallback on desktop.
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (_) { /* user cancelled or unsupported — fall through */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast(
+        lang === 'ru' ? 'Ссылка скопирована!' : lang === 'en' ? 'Link copied!' : 'Link kopyalandı!',
+        'success'
+      );
+    } catch (_) {
+      showToast(
+        lang === 'ru' ? 'Не удалось скопировать' : lang === 'en' ? 'Copy failed' : 'Kopyalanmadı',
+        'error'
+      );
+    }
   };
 
   // Helper to get category illustration
@@ -258,16 +298,29 @@ function ListingDetail({ id, t, navigateTo, lang, showToast, getCategoryTranslat
 
   return (
     <div className="max-w-4xl mx-auto my-8 px-4">
-      {/* Back Button */}
-      <button
-        onClick={() => navigateTo('/')}
-        className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors mb-6 group cursor-pointer"
-      >
-        <svg className="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        <span>{lang === 'ru' ? 'Назад к объявлениям' : lang === 'en' ? 'Back to listings' : 'Siyahıya qayıt'}</span>
-      </button>
+      {/* Top bar: Back + Share */}
+      <div className="flex items-center justify-between mb-6">
+        <button
+          onClick={() => navigateTo('/')}
+          className="flex items-center gap-2 text-xs text-slate-400 hover:text-white transition-colors group cursor-pointer"
+        >
+          <svg className="w-4 h-4 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          <span>{lang === 'ru' ? 'Назад к объявлениям' : lang === 'en' ? 'Back to listings' : 'Siyahıya qayıt'}</span>
+        </button>
+
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-[#c3d6cc] bg-[#171817] border border-[#242624] hover:border-[#c3d6cc]/40 px-3 py-2 rounded-xl transition-all cursor-pointer"
+          aria-label={lang === 'ru' ? 'Поделиться' : lang === 'en' ? 'Share' : 'Paylaş'}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span>{lang === 'ru' ? 'Поделиться' : lang === 'en' ? 'Share' : 'Paylaş'}</span>
+        </button>
+      </div>
 
       {/* Main Content Card */}
       <div className="grid md:grid-cols-2 gap-6 md:gap-8 bg-[#171817] border border-[#242624] p-4 md:p-8 rounded-2xl md:rounded-3xl shadow-xl">

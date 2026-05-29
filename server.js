@@ -1229,12 +1229,126 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SEO: sitemap + social sharing meta tags
+// ─────────────────────────────────────────────────────────────────────────────
+const PUBLIC_BASE_URL = (
+  process.env.PUBLIC_BASE_URL ||
+  process.env.CLIENT_ORIGIN ||
+  'https://baku-services.onrender.com'
+).replace(/\/+$/, '');
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function absoluteImageUrl(url) {
+  if (!url) return `${PUBLIC_BASE_URL}/logo512.png`;
+  if (url.startsWith('http')) return url;
+  if (url.startsWith('/')) return `${PUBLIC_BASE_URL}${url}`;
+  return `${PUBLIC_BASE_URL}/${url}`;
+}
+
+// Dynamic sitemap so Google can discover every listing.
+app.get('/sitemap.xml', async (req, res) => {
+  try {
+    const ads = await Ad.findAll({ attributes: ['id', 'updated_at'], order: [['created_at', 'DESC']], limit: 5000 });
+    const urls = [
+      `<url><loc>${PUBLIC_BASE_URL}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`
+    ];
+    for (const ad of ads) {
+      const lastmod = ad.updated_at ? new Date(ad.updated_at).toISOString() : new Date().toISOString();
+      urls.push(
+        `<url><loc>${PUBLIC_BASE_URL}/listing/${ad.id}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`
+      );
+    }
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`;
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    console.error('Sitemap error:', err);
+    res.status(500).send('');
+  }
+});
+
 // Serve frontend build static files only in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'client/build')));
+  const BUILD_DIR = path.join(__dirname, 'client/build');
+  const INDEX_HTML = path.join(BUILD_DIR, 'index.html');
+
+  // Inject per-listing Open Graph / Twitter meta tags so links unfurl nicely
+  // in WhatsApp, Telegram, Facebook, Twitter, etc. (crawlers don't run JS).
+  app.get('/listing/:id', async (req, res, next) => {
+    try {
+      const ad = await Ad.findByPk(req.params.id, {
+        include: [{ model: User, as: 'user', attributes: ['fullname'] }]
+      });
+      if (!ad) return next();
+
+      let template;
+      try {
+        template = fs.readFileSync(INDEX_HTML, 'utf8');
+      } catch (e) {
+        return next();
+      }
+
+      let firstImage = null;
+      if (ad.images) {
+        try {
+          const imgs = JSON.parse(ad.images);
+          if (Array.isArray(imgs) && imgs.length) firstImage = imgs[0];
+        } catch (_) { /* ignore */ }
+      }
+
+      const priceLabel = ad.price_type === 'negotiable'
+        ? 'Договорная'
+        : `${ad.price} AZN`;
+      const title = escapeHtml(`${ad.title} — ${priceLabel} | Baku Services`);
+      const rawDesc = (ad.description || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const description = escapeHtml(rawDesc || 'Объявление на Baku Services');
+      const image = escapeHtml(absoluteImageUrl(firstImage));
+      const url = `${PUBLIC_BASE_URL}/listing/${ad.id}`;
+
+      const meta = `
+    <title>${title}</title>
+    <meta name="description" content="${description}" />
+    <link rel="canonical" href="${url}" />
+    <meta property="og:type" content="product" />
+    <meta property="og:title" content="${title}" />
+    <meta property="og:description" content="${description}" />
+    <meta property="og:image" content="${image}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:site_name" content="Baku Services" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${title}" />
+    <meta name="twitter:description" content="${description}" />
+    <meta name="twitter:image" content="${image}" />
+  `;
+
+      // Replace the static <title> (and inject the rest right after it).
+      let html = template.replace(/<title>.*?<\/title>/i, meta.trim());
+      if (html === template) {
+        // No <title> found — inject before </head> as a fallback.
+        html = template.replace('</head>', `${meta}\n</head>`);
+      }
+
+      res.header('Content-Type', 'text/html');
+      res.send(html);
+    } catch (err) {
+      console.error('Listing meta injection error:', err);
+      next();
+    }
+  });
+
+  app.use(express.static(BUILD_DIR));
 
   app.get(/^\/(?!api\/).*/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+    res.sendFile(INDEX_HTML);
   });
 }
 
