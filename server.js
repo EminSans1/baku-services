@@ -986,6 +986,28 @@ app.delete('/api/listings/:id', checkUserAuth, handleAdDeletion);
 app.delete('/api/ads/:id', checkUserAuth, handleAdDeletion);
 
 // PUBLIC listing detail — does NOT expose contact info.
+// Increments a view counter, throttled per IP to avoid refresh-spam.
+const viewCooldown = new Map(); // key: `${ip}:${adId}` -> timestamp
+const VIEW_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
+// Periodically prune old cooldown entries so the map can't grow unbounded.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ts] of viewCooldown) {
+    if (now - ts > VIEW_COOLDOWN_MS) viewCooldown.delete(key);
+  }
+}, 30 * 60 * 1000).unref();
+
+function shouldCountView(req, adId) {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const key = `${ip}:${adId}`;
+  const now = Date.now();
+  const last = viewCooldown.get(key);
+  if (last && now - last < VIEW_COOLDOWN_MS) return false;
+  viewCooldown.set(key, now);
+  return true;
+}
+
 app.get('/api/listings/:id', async (req, res) => {
   const id = req.params.id;
   try {
@@ -999,6 +1021,13 @@ app.get('/api/listings/:id', async (req, res) => {
 
     if (!ad) {
       return res.status(404).json({ error: 'Объявление не найдено' });
+    }
+
+    // Count the view (fire-and-forget, throttled per IP).
+    let viewCount = ad.views || 0;
+    if (shouldCountView(req, id)) {
+      viewCount += 1;
+      ad.increment('views').catch(err => console.error('Failed to increment views:', err));
     }
 
     let parsedImages = [];
@@ -1024,6 +1053,7 @@ app.get('/api/listings/:id', async (req, res) => {
       trade_possible: ad.trade_possible,
       price_type: ad.price_type,
       images: parsedImages,
+      views: viewCount,
       has_user: !!ad.user_id
     });
   } catch (err) {

@@ -138,6 +138,11 @@ const Ad = sequelize.define('Ad', {
   images: {
     type: Sequelize.TEXT,
     allowNull: true
+  },
+  views: {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0
   }
 }, {
   tableName: 'ads',
@@ -206,6 +211,11 @@ async function syncDatabase() {
   await safeAddColumn('ads', 'images', {
     type: Sequelize.TEXT,
     allowNull: true
+  });
+  await safeAddColumn('ads', 'views', {
+    type: Sequelize.INTEGER,
+    allowNull: false,
+    defaultValue: 0
   });
 
   // Run native sync
