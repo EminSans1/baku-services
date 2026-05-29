@@ -208,6 +208,9 @@ function isAllowedImageUrl(url) {
   if (url.startsWith('https://res.cloudinary.com/')) {
     return /^https:\/\/res\.cloudinary\.com\/[a-zA-Z0-9_-]+\//.test(url);
   }
+  if (url.startsWith('https://images.unsplash.com/')) {
+    return true;
+  }
   if (url.startsWith('/api/uploads/')) {
     return safeLocalFilename(url.slice('/api/uploads/'.length)) !== null;
   }
@@ -306,7 +309,7 @@ app.use(helmet({
       // styles only (not scripts), which keeps the major XSS vector closed.
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://images.unsplash.com"],
       connectSrc: ["'self'"],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
