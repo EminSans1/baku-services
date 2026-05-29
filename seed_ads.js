@@ -18,7 +18,7 @@ async function run() {
       where: { email: 'ruslan.aliyev.dev@gmail.com' },
       defaults: {
         fullname: 'Руслан Алиев',
-        phone: '+994507654321',
+        phone: '+994500000000',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
       }
@@ -29,7 +29,7 @@ async function run() {
       where: { email: 'aysel.mammadova.design@gmail.com' },
       defaults: {
         fullname: 'Айсель Мамедова',
-        phone: '+994553219876',
+        phone: '+994550000000',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80'
       }
@@ -40,7 +40,7 @@ async function run() {
       where: { email: 'ilgar.hasanov.tech@mail.ru' },
       defaults: {
         fullname: 'Ильгар Гасанов',
-        phone: '+994709876543',
+        phone: '+994700000000',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
       }
@@ -51,7 +51,7 @@ async function run() {
       where: { email: 'dmitry.petrov.auto@yandex.ru' },
       defaults: {
         fullname: 'Дмитрий Петров',
-        phone: '+994501234567',
+        phone: '+994770000000',
         password: 'mockpassword123',
         avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
       }
